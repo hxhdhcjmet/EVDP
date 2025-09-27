@@ -24,7 +24,7 @@ class DataPredict:
         x_col:自变量
         y_col:因变量
         """
-        self.model=None #储存训练好的模型
+        self.model={} #储存训练好的模型
         self.data=data
         self.x_col=x_col
         self.y_col=y_col
@@ -32,6 +32,7 @@ class DataPredict:
         self.new_x=np.array([]) #新的x坐标
         self.degree=1 #设置多项式回归时最高次数
         self.interpolated_results={}# 插值结果,字典储存,key为方法，value为插值结果
+        self.prediction_info={}# 拟合预测信息
         self.prediction_results={}# 拟合预测结果
 
        # 设定多项式回归阶数
@@ -111,14 +112,14 @@ class DataPredict:
             return expression
    
  
-
-
-
-    # 回归拟合
-    def Prediction(self,degree=1):
+#-----------------------------------------------------------------------------------------------------------------
+# 回归拟合
+    def train_model(self,method='polynomial',degree=1,test_size=0.2,random_forest_params=None):
         """
-        回归拟合
-        methods:指定方法,linear_regression:线性回归  random_forest:随机森林
+        meethod:指定回归方法,默认为polynomial多项式回归
+        degree:多项式回归系数,默认为1
+        test_size:测试集比例
+        random_forest_params:随机森林参数字典
         """
         try:
             x=np.array([float(x) for x in self.x_col])
@@ -128,54 +129,136 @@ class DataPredict:
 
         if len(x)!=len(y):
             raise ValueError('the length of x and y is not same')
+        #分割训练集和测试集
+        x_train,x_test,y_train,y_test=train_test_split(x,y,test_size=test_size,random_state=42)
+
+        if x_train.ndim !=2:
+            x_train=x_train.reshape(-1,1)
         
-        self.degree=degree
-        # 进行回归并展示相关数据
-        X_reshape=x.reshape(-1,1)
-        #创建多项式回归管道
-        model=Pipeline([('poly',PolynomialFeatures(degree=degree)),('linear',LinearRegression())])
-
-        #创建并训练数据
-        model.fit(X_reshape,y)
-        self.model=model
-
-        y_pred=model.predict(X_reshape)
-
-        #计算评估指标
-        r2=r2_score(y,y_pred)
-        mse=mean_squared_error(y,y_pred)
-        rmse=np.sqrt(mse)
-
-        #计算SSE,SSR,SST
-        SSE=np.sum((y-y_pred)**2)
-        SSR=np.sum((y_pred-np.mean(y))**2)
-        SST=np.sum((y-np.mean((y)))**2)
-
-        #获取回归系数
-        coefficients=model.named_steps['linear'].coef_
-        intercept=model.named_steps['linear'].intercept_
-
-        #构建回归表达式
-        regression_expression=self.build_regression_expression(coefficients,intercept)
-        self.prediction_results['linear']=y_pred
-        
-        #返回内容
-        return{
-            'y_pred':y_pred,
-            'r2':r2,
-            'mse':mse,
-            'rmse':rmse,
-            'SSE':SSE,
-            'SSR':SSR,
-            'SST':SST,
-            'coefficients':coefficients,
-            'intercept':intercept,
-            'regression_expression':regression_expression
-        }
+        if x_test.ndim != 2:
+            x_test=x_test.reshape(-1,1)
     
+        
+
+        result={}
+
+        if method == 'polynomial':
+            self.degree=degree
+            #创建多项式回归管道
+            model=Pipeline([('poly',PolynomialFeatures(degree=degree)),('linear',LinearRegression())])
+
+            # 训练模型
+            model.fit(x_train,y_train)
+            self.model[method]=model
+
+            # 预测
+            y_pred_train=model.predict(x_train)
+            y_pred_test=model.predict(x_test)
+            y_pred=model.predict(x.reshape(-1,1))
+
+            # 评估指标
+            r2_train = r2_score(y_train, y_pred_train)
+            r2_test = r2_score(y_test, y_pred_test)
+            mse_train = mean_squared_error(y_train, y_pred_train)
+            mse_test = mean_squared_error(y_test, y_pred_test)
+            rmse_train = np.sqrt(mse_train)
+            rmse_test = np.sqrt(mse_test)
+            mae_train = mean_absolute_error(y_train, y_pred_train)
+            mae_test = mean_absolute_error(y_test, y_pred_test)
+
+            # 获取回归系数
+            coefficients=model.named_steps['linear'].coef_
+            intercept=model.named_steps['linear'].intercept_
+
+            # 回归表达式
+            regression_expression=self.build_regression_expression(coefficients,intercept)
+
+            result = {
+                'method': method,
+                'y_pred_train': y_pred_train,
+                'y_pred_test': y_pred_test,
+                'X_train': x_train,
+                'X_test': x_test,
+                'y_train': y_train,
+                'y_test': y_test,
+                'r2_train': r2_train,
+                'r2_test': r2_test,
+                'mse_train': mse_train,
+                'mse_test': mse_test,
+                'rmse_train': rmse_train,
+                'rmse_test': rmse_test,
+                'mae_train': mae_train,
+                'mae_test': mae_test,
+                'coefficients': coefficients,
+                'intercept': intercept,
+                'regression_expression': regression_expression,
+                'degree': degree
+            }
+        elif method=='random_forest':
+            # 设置随机森林参数:
+            if random_forest_params is None:
+                random_forest_params={
+                    'n_estimators':100,
+                    'max_depth':None,
+                    'random_state':42
+                }
+            
+            # 创建随机森林模型
+            model=RandomForestRegressor(**random_forest_params)
+
+            # 训练模型
+            model.fit(x_train,y_train)
+            self.model[method]=model
+
+            # 预测
+            y_pred_train=model.predict(x_train)
+            y_pred_test=model.predict(x_test)
+            y_pred=model.predict(x.reshape(-1,1))
+
+            # 计算评估指标
+            r2_train = r2_score(y_train, y_pred_train)
+            r2_test = r2_score(y_test, y_pred_test)
+            mse_train = mean_squared_error(y_train, y_pred_train)
+            mse_test = mean_squared_error(y_test, y_pred_test)
+            rmse_train = np.sqrt(mse_train)
+            rmse_test = np.sqrt(mse_test)
+            mae_train = mean_absolute_error(y_train, y_pred_train)
+            mae_test = mean_absolute_error(y_test, y_pred_test)
+
+            result={
+                'method': method,
+                'y_pred_train': y_pred_train,
+                'y_pred_test': y_pred_test,
+                'X_train': x_train,
+                'X_test': x_test,
+                'y_train': y_train,
+                'y_test': y_test,
+                'r2_train': r2_train,
+                'r2_test': r2_test,
+                'mse_train': mse_train,
+                'mse_test': mse_test,
+                'rmse_train': rmse_train,
+                'rmse_test': rmse_test,
+                'mae_train': mae_train,
+                'mae_test': mae_test,
+                'params': random_forest_params,
+                'feature_importance': model.feature_importances_
+            }
+
+        else:
+            print(f'not support such method:{method}')
+            return None
+        self.prediction_info[method]=result
+        self.prediction_results[method]=y_pred
+        return result
+#-----------------------------------------------------------------------------------------------------------------
+
+
+
+
 
     #用已经训练好的模型预测给定x的函数值
-    def predict_value(self,xvalue):
+    def predict_value(self,xvalue,method):
         """
         计算给定xvalue处的函数回归值
         """
@@ -192,13 +275,17 @@ class DataPredict:
         
         #执行预测
         x_reshaped=np.array([[x]])
-        y_pred=self.model.predict(x_reshaped)
+        y_pred=self.model[method].predict(x_reshaped)
 
         return y_pred[0]
     
-    def visualize_predict_result(self,X,y,y_pred):
+    def visualize_predict_result(self,X,y,y_pred,method):
         """
         可视化回归预测结果
+        X:原自变量
+        y:原因变量
+        y_pred:预测得到的y值,使用self.prediction_result[method]获得
+        method:使用的回归预测方法
         """
         plt.figure(figsize=(12,5))
 
@@ -207,14 +294,18 @@ class DataPredict:
 
         #生成平滑曲线
         X_smooth=np.linspace(min(X),max(X),100).reshape(-1,1)
-        y_smooth=self.model.predict(X_smooth)
+        y_smooth=self.model[method].predict(X_smooth)
         plt.plot(X_smooth,y_smooth,color='red',linewidth=2,label='拟合结果曲线')
 
         plt.xlabel('X')
         plt.ylabel('y')
-        plt.title(f'{self.degree}阶多项式回归拟合')
         plt.legend()
         plt.grid(True)
+        if method == 'polynomial':
+            # 当方法是多项式回归时的标题
+            plt.title(f'{self.degree}阶多项式回归拟合')
+        else:
+            plt.title(f'{method}回归拟合')
 
         #残差图
         plt.subplot(1,2,2)
