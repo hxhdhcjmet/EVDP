@@ -1,39 +1,34 @@
 import pandas as pd
 import numpy as np
+import os
 
-
-def load_data(file_path,file_format=None):
+def load_data(file):
     """
     导入数据,支持CSV,Excel等
-    file_path:文件路径
-    file_format:文件格式,默认空
+    file:传入的文件
     返回导入的数据内容
     """
-    try:
-        if file_format is None:
-            if file_path.endswith('.csv'):
-                file_format='csv'
-            elif file_path.endswith(('.xlsx','.xls')):
-                file_format='excel'
-            else:
-                raise ValueError('can not recognize file format,please check your file')
-            
-            # 根据格式读取
-            if file_format=='csv':
-                dataContent=pd.read_csv(file_path)
-            elif file_format=='excel':
-                dataContent=pd.read_excel(file_path)
-            else:
-                raise('do not support file format:{file_format}')
-  
-            print(f'succeed load data,totally {dataContent.shape[0]} rows,{dataContent.shape[1]} columns')
-            return dataContent
-    except FileNotFoundError:
-        print(f'Can not find file:{file_path}')
-        return None
-    except Exception as e:
-        print(f'error happened when loading data:{str(e)}')
-        return None
+    if isinstance(file,str):
+        if not os.path.exist(file):
+            raise FileExistsError(f"文件路径不存在：{file}")
+        elif not os.path.isfile(file):
+            raise ValueError(f"指定路径不是文件：{file}")
+        
+        if file.endswith(".csv"):
+            file_type="csv"
+        elif file.endwith('.xlsx'):
+            file_type="xlsx"
+        else:
+            raise ValueError("仅支持CSV,EXCEL文件")
+        
+        if file_type == "csv":
+            return pd.read_csv(file)
+        elif file_type == "xlsx":
+            return pd.read_excel(file)
+        else:
+            raise ValueError("文件读取失败")
+
+
 
 
 def clean_data(dataContent):
