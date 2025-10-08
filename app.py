@@ -81,16 +81,18 @@ with input_col2:
     if uploaded_file is not None:
         # 读取上传得文件
        try:
-          if uploaded_file.name.endswith(".csv"):
-              data=pd.read_csv(uploaded_file)
-          else:
-              data=pd.read_excel(uploaded_file)
+           if uploaded_file.name.endswith(".csv"):
+               data=pd.read_csv(uploaded_file)
+           else:
+               data=pd.read_excel(uploaded_file)
+
+          #data=pre.load_data(uploaded_file)
           # data=pre.load_data(uploaded_file)
-          if data is None or not isinstance(data,pd.DataFrame):
+           if data is None or not isinstance(data,pd.DataFrame):
               raise ValueError("文件读取失败,未返回有效的数据表格")
-          st.session_state.raw_data=data
-          st.success("文件读取成功！")
-          st.dataframe(st.session_state.raw_data.head())#预览前面部分
+           st.session_state.raw_data=data
+           st.success("文件读取成功！")
+           st.dataframe(st.session_state.raw_data.head())#预览前面部分
        except Exception as e:
            st.error(f"文件读取失败: {e}")
 
@@ -261,40 +263,49 @@ if st.session_state.dp_instance is not None and st.session_state.interpolated:
 #--------------------------------------
 
 if st.session_state.fitted:
-    st.subheader("6.结果可视化")
+    st.subheader("6.结果可视化(配置图片信息或下载图片请使用visualize页面功能)")
     
-    # 可视化
-    fitted_method = st.selectbox("选择可视化方法",st.session_state.dp_instance.prediction_info.keys())
-    if st.button("生成可视化图表"):
-        def get_fig(method):
-            fig = Figure(figsize=(12,5))
-            ax1 = fig.add_subplot(121)
-            ax2 = fig.add_subplot(122)
-
-            X = np.array(st.session_state.dp_instance.x_col)
-            y = np.array(st.session_state.dp_instance.y_col)
-            y_pred = st.session_state.dp_instance.prediction_results[method]
-
-            # 拟合曲线
-            ax1.scatter(X,y,c='blue',label='实际值')
-            X_smooth=np.linspace(min(X),max(X),100).reshape(-1,1)
-            y_smooth=st.session_state.dp_instance.model[method].predict(X_smooth)
-            ax1.plot(X_smooth,y_smooth,'r-',linewidth=2,label='拟合曲线')
-            ax1.set_xlabel('X')
-            ax1.set_ylabel('Y')
-            ax1.legend()
-            ax1.set_title(f"{method}拟合" if method != "polynomial" else f'{fit_degree}阶多项式拟合')
-
-            #残差图
-            residuals=y-y_pred
-            ax2.scatter(y_pred,residuals,c="green")
-            ax2.axhline(y=0,c="red",linestyle='--')
-            ax2.set_xlabel('预测值')
-            ax2.set_ylabel('残差')
-            ax2.set_title('残差分布')
-            return fig
+    # # 可视化
+    # fitted_method = st.selectbox("选择可视化方法",st.session_state.dp_instance.prediction_info.keys())
+    # if st.button("生成可视化图表"):
+    #     fig=st.session_state.dp_instance.visualize_predict_result(st.session_state.dp_instance.x_col,
+    #                                                           st.session_state.dp_instance.y_col
+    #                                                           ,st.session_state.dp_instance.prediction_results[fit_method]
+    #                                                           ,fit_method)
+    #     st.pyplot(fig)
         
-        st.pyplot(get_fig(fit_method))
+
+
+
+        # def get_fig(method):
+        #     fig = Figure(figsize=(12,5))
+        #     ax1 = fig.add_subplot(121)
+        #     ax2 = fig.add_subplot(122)
+
+        #     X = np.array(st.session_state.dp_instance.x_col)
+        #     y = np.array(st.session_state.dp_instance.y_col)
+        #     y_pred = st.session_state.dp_instance.prediction_results[method]
+
+        #     # 拟合曲线
+        #     ax1.scatter(X,y,c='blue',label='实际值')
+        #     X_smooth=np.linspace(min(X),max(X),100).reshape(-1,1)
+        #     y_smooth=st.session_state.dp_instance.model[method].predict(X_smooth)
+        #     ax1.plot(X_smooth,y_smooth,'r-',linewidth=2,label='拟合曲线')
+        #     ax1.set_xlabel('X')
+        #     ax1.set_ylabel('Y')
+        #     ax1.legend()
+        #     ax1.set_title(f"{method}拟合" if method != "polynomial" else f'{fit_degree}阶多项式拟合')
+
+        #     #残差图
+        #     residuals=y-y_pred
+        #     ax2.scatter(y_pred,residuals,c="green")
+        #     ax2.axhline(y=0,c="red",linestyle='--')
+        #     ax2.set_xlabel('预测值')
+        #     ax2.set_ylabel('残差')
+        #     ax2.set_title('残差分布')
+        #     return fig
+        
+        # st.pyplot(get_fig(fit_method))
     
 
    
