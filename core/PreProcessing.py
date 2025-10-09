@@ -9,18 +9,17 @@ def load_data(file):
     返回导入的数据内容
     """
     if isinstance(file,str):
-        if not os.path.exist(file):
-            raise FileExistsError(f"文件路径不存在：{file}")
-        elif not os.path.isfile(file):
-            raise ValueError(f"指定路径不是文件：{file}")
+        # if not os.path.exist(file):
+        #     raise FileExistsError(f"文件路径不存在：{file}")
+        # elif not os.path.isfile(file):
+        #     raise ValueError(f"指定路径不是文件：{file}")
         
-        if file.endswith(".csv"):
+        if file.name.endswith(".csv"):
             file_type="csv"
-        elif file.endwith('.xlsx'):
+        elif file.name.endwith('.xlsx'):
             file_type="xlsx"
         else:
             raise ValueError("仅支持CSV,EXCEL文件")
-        
         if file_type == "csv":
             return pd.read_csv(file)
         elif file_type == "xlsx":
