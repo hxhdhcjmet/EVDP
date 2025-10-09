@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 from scipy import interpolate
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
@@ -279,46 +280,58 @@ class DataPredict:
 
         return y_pred[0]
     
-    def visualize_predict_result(self,X,y,y_pred,method):
+    def visualize_predict_result(self,X,y,y_pred,method,title,x_label,y_label,legend_actual,legend_fit):
         """
         可视化回归预测结果
         X:原自变量
         y:原因变量
         y_pred:预测得到的y值,使用self.prediction_result[method]获得
         method:使用的回归预测方法
+        title:自定义标题
+        x_label:x坐标名称
+        y_label:y坐标名称
+        legend_actual:实际值图例
+        legend_fit:拟合曲线图例
         """
-        plt.figure(figsize=(12,5))
-
-        plt.subplot(1,2,1)
-        plt.scatter(X,y,color='blue',label='实际值')
+        
+        fig=Figure(figsize=(12,5))
+        ax=fig.add_subplot(121)
+        ax2=fig.add_subplot(122)
+        # 子图一
+    
+        ax.scatter(X,y,color='blue',label=legend_actual)
 
         #生成平滑曲线
         X_smooth=np.linspace(min(X),max(X),100).reshape(-1,1)
         y_smooth=self.model[method].predict(X_smooth)
-        plt.plot(X_smooth,y_smooth,color='red',linewidth=2,label='拟合结果曲线')
+        ax.plot(X_smooth,y_smooth,color='red',linewidth=2,label=legend_fit)# 拟合曲线
 
-        plt.xlabel('X')
-        plt.ylabel('y')
-        plt.legend()
-        plt.grid(True)
-        if method == 'polynomial':
-            # 当方法是多项式回归时的标题
-            plt.title(f'{self.degree}阶多项式回归拟合')
-        else:
-            plt.title(f'{method}回归拟合')
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(y_label)
+        ax.legend()
+        ax.grid(True)
+        ax.set_title(title)
+        # if method == 'polynomial':
+        #     # 当方法是多项式回归时的标题
+        #     ax.set_title(f'{self.degree}阶多项式回归拟合')
+        # else:
+        #     ax.set_title(f'{method}回归拟合')
 
+
+        
         #残差图
-        plt.subplot(1,2,2)
+        
+        #plt.subplot(1,2,2)
         residuals=y-y_pred
-        plt.scatter(y_pred,residuals,color='green')
-        plt.axhline(y=0,color='red',linestyle='--')
-        plt.xlabel('预测值')
-        plt.ylabel('残差')
-        plt.title('残差')
-        plt.grid(True)
+        ax2.scatter(y_pred,residuals,color='green')# 残差图
+        ax2.axhline(y=0,color='red',linestyle='--')
+        ax2.set_xlabel('预测值')
+        ax2.set_ylabel('残差')
+        ax2.set_title('残差')
+        ax2.grid(True)
 
-        plt.tight_layout()
-        plt.show()
+        fig.tight_layout()
+        return fig
 
 
         
