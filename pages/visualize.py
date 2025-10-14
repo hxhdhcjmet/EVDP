@@ -7,6 +7,13 @@ from PIL import Image
 from core.predict import DataPredict as pred
 from core import watermark_utils as wm
 
+
+
+st.set_page_config(
+    page_title="拟合数据可视化与图片下载",
+    page_icon="icon/visualize.png",
+    layout="wide"
+)
 st.title("拟合数据可视化与图片下载")
 plt.rcParams['font.family']=['SimHei']
 plt.rcParams['axes.unicode_minus']=False
