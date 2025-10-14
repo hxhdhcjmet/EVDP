@@ -3,6 +3,7 @@ from core import visualize as vs
 from core import PreProcessing as pre
 from core.predict import DataPredict as pred 
 from core import quickPlot as plt
+from core import MultiRegression as multiregress
 import streamlit as st
 from streamlit_drawable_canvas import st_canvas
 import numpy as np
@@ -14,7 +15,9 @@ from matplotlib.figure import Figure
 #页面配置
 st.set_page_config(
     page_title="数据处理与拟合工具",
-    layout="wide" #宽布局
+    layout="wide" ,#宽布局
+    page_icon="icon/home.png"
+    
 )
 st.title("数据处理与拟合web工具")
 st.markdown("点击/拖拽添加数据,自动处理、拟合与可视化")
@@ -25,10 +28,13 @@ st.markdown("点击/拖拽添加数据,自动处理、拟合与可视化")
 #--------------------------------------
 if "raw_data" not in st.session_state:
     st.session_state.raw_data = pd.DataFrame(columns=["x", "y"])  # 原始数据
+
 if "cleaned_data" not in st.session_state:
     st.session_state.cleaned_data = None  # 清洗后的数据
+
 if "selected_data" not in st.session_state:
     st.session_state.selected_data = None  # 用于插值和拟合的数据源
+
 if "dp_instance" not in st.session_state:
     st.session_state.dp_instance = None  # 数据分析实例
 
@@ -37,16 +43,39 @@ if "dp.session" not in st.session_state:
 
 if "interpolated_data" not in st.session_state:
     st.session_state.interpolated_data = None  # 插值后的数据    
+
 if "interpolated" not in st.session_state:
     st.session_state.interpolated = False  # 是否已插值
 
 if "processed_data" not in st.session_state:
     st.session_state.processed_data = None  # 处理后的数据
+
 if "fitted" not in st.session_state:
     st.session_state.fitted = False  # 是否已拟合
+
 if "fit_result" not in st.session_state:
     st.session_state.fit_result = None  # 拟合结果
 
+if "multi_regression" not in st.session_state:
+    st.session_state.multi_regression = None #多元回归实例
+
+if "multi_metrics_list" not in st.session_state:
+    st.session_state.multi_metrics_list = [] # 多元回归指标
+
+
+
+
+def validate_selection(regression_type,x_cols,y_col):
+    """回归模型、自变量和因变量选择合理性检验"""
+    errors=[]
+    if y_col in x_cols:
+        errors.append("因变量不能与自变量相同！")
+    
+    if regression_type == "单元回归" and len(x_cols)!=1:
+        errors.append("单元回归仅可选择一个自变量！")
+    if regression_type == "多元回归" and len(x_cols) < 1:
+        errors.append("多元回归需选择至少一个自变量！")
+    return errors
 #--------------------------------------
 #1.数据收集模块
 #--------------------------------------
@@ -60,7 +89,7 @@ with input_col1:
         fill_color="rgba(255, 165, 0, 0.8)",  # 点的颜色
         stroke_width=5,
         stroke_color="rgba(0, 0, 255, 1)",
-        background_color="#f0f0f0",
+        background_color="#1E1A1A",
         height=300,
         width=500,
         drawing_mode="point",  # 支持"point"（点击）或"freedraw"（拖拽）
@@ -143,24 +172,123 @@ if st.session_state.raw_data is not None:
         st.markdown("**选中清洗后数据**")
         st.dataframe(st.session_state.selected_data.head())
 
+    # 选择回归类型
+    regression_type = st.radio(
+        "选则回归类型",
+        options=["单元回归","多元回归"],
+        index=0,
+        help="单元回归:1个自变量->1个因变量;多元回归:多个自变量->1个因变量"
+    )
+     
+
     # 选择自变量数据和因变量数据
     if st.session_state.selected_data is not None:
         cols=st.session_state.selected_data.columns.tolist()
-        col1,col2=st.columns(2)
+        col1=st.columns(1)
         with col1:
-            x_col = st.selectbox("选择自变量列(X)",cols)
-        with col2:
-            y_col = st.selectbox( "选择因变量列(Y)",cols) 
+            y_col=st.selectbox(
+                "选择因变量(响应变量y)",
+                options=cols,
+                index=0
+            ) 
+            y_col_index=st.session_state.selected_data.columns.get_loc(y_col)#获取下标
+    
+    st.subheader("选择自变量(特征变量x)")
+    available_x_cols =[col for col in cols if col != y_col]
+
+    if regression_type == "单元回归":
+        # 单元回归，仅可选择1个自变量
+        x_cols = [st.selectbox(
+            "选择一个自变量",
+            options=available_x_cols,
+            index=0
+        )]
+    else:
+        x_cols=st.st.multiselect(
+            "选择至少一个自变量",
+            options=available_x_cols,
+            default=[available_x_cols[0]]#默认第一个
+        )
+        x_col_index = [st.session_state.selected_data.columns.get_loc(col) for col in x_cols] #获取下标
+
+
+
 
     # 初始化DataPredict实例
-    if st.button("初始化插值拟合分析器"):
-        st.session_state.dp_instance=pred(
-            data=st.session_state.selected_data,
-            x_col=st.session_state.selected_data[x_col],
-            y_col=st.session_state.selected_data[y_col],
-            n=10#插值倍数
-        )
-        st.success("分析器初始化成功！")
+    if regression_type == "单元回归":
+        if st.button("初始化插值拟合分析器"):
+            st.session_state.dp_instance=pred(
+                data=st.session_state.selected_data,
+                x_col=st.session_state.selected_data[x_cols],
+                y_col=st.session_state.selected_data[y_col],
+                n=10#插值倍数
+         )
+            st.success("分析器初始化成功！")
+     # 多元回归初始化       
+    elif regression_type == "多元回归":
+        if st.button("初始化多元回归器"):
+            st.session_state.multi_regression=multiregress(
+                data=st.session_state.selected_data,
+                feature_cols=x_col_index,
+                reaction_col=y_col_index,
+            )
+            st.success("多元回归器初始化成功！")
+
+#--------------------------------------
+#4多元回归
+#--------------------------------------
+if st.session_state.multi_regression is not None:
+    st.subheader("4.多元回归")
+
+    fit_methods=st.multiselect(
+        "选择多元回归方法",
+        options=["Multiple Linear Regression","PLS","Ridge"],
+        default=["Multiple Linear Regression"]
+    )
+
+    if "Multiple Linear Regression" in fit_methods:
+        st.session_state.multi_regression.train_linear_regression()
+        st.session_state.multi_metrics_list.append(st.session_state.multi_regression.metrics["Multiple Linear Regression"])
+    if "PLS" in fit_methods:
+        st.session_state.multi_regression.train_pls_regression()
+        st.session_state.multi_metrics_list.append(st.session_state.multi_regression.metrics["PLS"])
+    if "Ridge" in fit_methods:
+        st.session_state.multi_regression.train_ridge_regression()
+        st.session_state.multi_metrics_list.append(st.session_state.multi_regression.metrics["Ridge regression"])
+
+    st.success("拟合成功！")
+    st.markdown("### 拟合指标")
+    if not st.session_state.multi_metrics_list:
+        st.info("无回归模型数据,请先执行回归分析！")
+    else:
+        # 转换为DataFrame
+        metrics_df = pd
+    
+
+
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            
+
+
+
 
 #--------------------------------------
 #4插值处理
