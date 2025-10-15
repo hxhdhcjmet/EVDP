@@ -34,7 +34,7 @@ class MultiRegressionAnalyzer:
         self.y=self.data[reaction_col].values
 
         # 划分训练集和测试集
-        self.X_train,self.X_text,self.y_train,self.y_test=train_test_split(
+        self.X_train,self.X_test,self.y_train,self.y_test=train_test_split(
             self.X,self.y,test_size=test_size,random_state=random_state
         )
 
@@ -61,7 +61,7 @@ class MultiRegressionAnalyzer:
 
     def train_linear_regression(self,model_name="Multiple Linear Regression"):
         """多元线性回归模型训练"""
-        model = LinearRegression
+        model = LinearRegression()
         model.fit(self.X_train_scaled,self.y_train)
 
         # 预测
