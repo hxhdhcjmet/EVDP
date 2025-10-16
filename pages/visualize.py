@@ -28,17 +28,26 @@ def save_fig(fig,format='png',dpi=300):
     return buf
     
 # 确保可视化数据存在
-if "dp_instance" not in st.session_state or st.session_state.dp_instance is None or st.session_state.fitted is False:
-    st.error("请先完成拟合分析")
-else:
+if "dp_instance" not in st.session_state and st.session_state.dp_instance is None and st.session_state.multi_regression is None:
+    st.error("请先执行拟合！")
+elif st.session_state.dp_instance is not None:
     dp_instance = st.session_state.dp_instance
     fit_methods = list(dp_instance.prediction_info.keys())
     if not fit_methods:
         # 拟合方法为空
-        st.error("未找到拟合结果,请先执行拟合")
+        st.error("未找到单元拟合结果,请先执行拟合")
     else:
         # 选择拟合方法
         fit_method=st.selectbox("选择拟合方法",fit_methods)
+elif st.session_state.multi_regression is not None:
+    multi_regression = st.session_state.multi_regression
+    fit_methods = list(multi_regression.models.keys())
+    if not fit_methods:
+        st.error("未找到多元拟合结果，请先执行拟合")
+    else:
+        fit_method = st.selectbox("选择拟合方法",fit_methods)
+
+
 
 
 
@@ -80,18 +89,28 @@ else:
 #保存图片(用户选择是否下载)
 #--------------------------------------
     if st.button("生成可视化图片"):
-        #fitted_method=st.selectbox("选择可视化方法",st.session_state.dp_instance.prediction_info.keys())
-        fig=st.session_state.dp_instance.visualize_predict_result(
-            st.session_state.dp_instance.x_col,
-            st.session_state.dp_instance.y_col,
-            st.session_state.dp_instance.prediction_results[fit_method],
-            fit_method,
-            plot_title,
-            x_label,
-            y_label,
-            legend_actual,
-            legend_fit
+        if st.session_state.dp_instance is not None:
+            fig=st.session_state.dp_instance.visualize_predict_result(
+                st.session_state.dp_instance.x_col,
+                st.session_state.dp_instance.y_col,
+                st.session_state.dp_instance.prediction_results[fit_method],
+                fit_method,
+                plot_title,
+                x_label,
+                y_label,
+                legend_actual,
+                legend_fit
         )
+        elif st.session_state.multi_regression is not None:
+            fig=st.session_state.multi_regression.visualize_predict_result(
+                fit_method,
+                plot_title,
+                x_label,
+                y_label,
+                legend_actual,
+                legend_fit
+            )
+
         if add_wm:
             fig=wm.add_watermark(fig,watermark_text,position=position)
             if upload_logo is not None:
