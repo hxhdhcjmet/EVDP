@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from matplotlib.figure import Figure
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler # 标准化x^ = (x-mu)/sigma PLS等模型需要
 from sklearn.linear_model import LinearRegression, Ridge,Lasso # 多元线性回归
@@ -99,45 +100,87 @@ class MultiRegressionAnalyzer:
 
 
 # 回归结果可视化
-    def visualize_predict_result(self,model_name,title,x_label,y_label):
-        """
-        可视化回归预测结果
-        model_name:模型名称
-        title:图标题
-        x_label:x轴
-        y_label:y轴
-        """
-        y_pred = self.predictions[model_name]
-        r2=self.metrics[model_name]
+    # def visualize_predict_result(self,model_name,title,x_label,y_label):
+    #     """
+    #     可视化回归预测结果
+    #     model_name:模型名称
+    #     title:图标题
+    #     x_label:x轴
+    #     y_label:y轴
+    #     """
+    #     y_pred = self.predictions[model_name]
+    #     r2=self.metrics[model_name]
 
-        fig,ax = plt.subplots(figsize=(8,6))
-        ax.scatter(self.y_test,y_pred,alpha=0.6,label="预测值")
-        ax.plot([self.y.min(),self.y.max()],[self.y.min(),self.y.max()],'r--',label="对比线y=x")
-        ax.set_xlabel(x_label)
-        ax.set_ylabel(y_label)
-        ax.set_title(f"{title}(R^2={r2:.4f})")
-        ax.legend()
-        return fig
+    #     fig,ax = plt.subplots(figsize=(8,6))
+    #     ax.scatter(self.y_test,y_pred,alpha=0.6,label="预测值")
+    #     ax.plot([self.y.min(),self.y.max()],[self.y.min(),self.y.max()],'r--',label="对比线y=x")
+    #     ax.set_xlabel(x_label)
+    #     ax.set_ylabel(y_label)
+    #     ax.set_title(f"{title}(R^2={r2:.4f})")
+    #     ax.legend()
+    #     return fig
     
-    def plot_residuals(self,model_name,title,x_label,y_label):
+    # def plot_residuals(self,model_name,title,x_label,y_label):
+    #     """
+    #     绘制残差图
+    #     model_name:模型名称
+    #     title:标题名称
+    #     x_label:x坐标名称
+    #     y_label:y坐标名称
+    #     """
+    #     y_pred = self.predictions[model_name]
+    #     residulals = self.y_test-y_pred
+
+    #     fig,ax = plt.subplots(figsize=(8,6))
+    #     ax.scatter(y_pred,residulals,alpha=0.6)
+    #     ax.axhline(y=0,color="r",linestyle="--")
+    #     ax.set_xlabel(x_label)
+    #     ax.set_ylabel(y_label)
+    #     ax.set_title(title)
+        
+    #     return fig
+
+    def visualize_predict_result(self,model_name,title,x_label,y_label,legend_autual,legend_fit):
         """
-        绘制残差图
-        model_name:模型名称
-        title:标题名称
+        绘制拟合图和残差图
+        model_name:回归模型名称
+        title:标题
         x_label:x坐标名称
         y_label:y坐标名称
+        legend_actual:实际值图例
+        legend_fit:插值图例
         """
-        y_pred = self.predictions[model_name]
-        residulals = self.y_test-y_pred
+        y_pred=self.predictions[model_name]
+        fig=Figure(figsize=(12,5))
+        ax=fig.add_subplot(121)
+        ax2=fig.add_subplot(122)
 
-        fig,ax = plt.subplots(figsize=(8,6))
-        ax.scatter(y_pred,residulals,alpha=0.6)
-        ax.axhline(y=0,color="r",linestyle="--")
+        # 第一幅图
+        ax.scatter(self.y_test,y_pred,alpha=0.6,label=legend_autual)
+        ax.plot([self.y.min(),self.y.max()],[self.y.min(),self.y.max()],'r--',label=legend_fit)
         ax.set_xlabel(x_label)
         ax.set_ylabel(y_label)
         ax.set_title(title)
-        
+        ax.legend()
+        ax.grid(True)
+
+        # 第二幅子图
+        residuals = self.y_test- y_pred
+        ax2.scatter(y_pred,residuals,alpha=0.6)
+        ax2.axhline(y=0,color="r",linestyle="--")
+        ax2.set_xlabel("预测值")
+        ax2.set_ylabel("残差")
+        ax2.set_title("残差图")
+        ax2.grid(True)
+
+
+        fig.tight_layout()
         return fig
+        
+
+
+
+
     
     def plot_feature_importance(self,model_name,title,x_label,y_label):
         """多元回归显示各分量的重要性"""
