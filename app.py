@@ -267,7 +267,7 @@ if st.session_state.multi_regression is not None:
             else:
         # 转换为DataFrame
                 col1,col2,col3=st.columns(3)
-                if "Multiple Linear Regresion" in fit_methods:
+                if "Multiple Linear Regression" in fit_methods:
                     mlr_metrics=st.session_state.multi_regression.metrics["Multiple Linear Regression"]
                     with col1:
                         st.subheader("多元线性回归")
