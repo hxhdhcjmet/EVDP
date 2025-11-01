@@ -209,3 +209,6 @@ __marimo__/
 # 测试过程文件、文档
 *.xlsx
 *.csv
+
+# data保存文件夹
+data/
