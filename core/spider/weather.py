@@ -368,10 +368,10 @@ def get_815d_weather_data(city_code:str):
         
 
 
+if __name__ == "__mian__":
+    beijing = 101010100
+    qingdao = 101120201
+    shanghai = 101020100
 
-beijing = 101010100
-qingdao = 101120201
-shanghai = 101020100
-
-d7_wea = get_7d_weather_data(shanghai)
-save(d7_wea,'上海8-15日天气')
+    d7_wea = get_7d_weather_data(shanghai)
+    save(d7_wea,'上海8-15日天气')
