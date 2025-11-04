@@ -24,7 +24,13 @@ def get_data_path(dir_name:str='data',filename:str=None):
     file_path = os.path.join(data_dir,filename)
     return file_path
 
-
+def default_filename():
+    """
+    创建默认文件名为当前时间
+    """
+    current_time = datetime.now()
+    time_str = current_time.strftime(r'%Y%m%d%H%M%S')
+    return time_str
 
 
 def save_weatherdatas_as_csv(row_data:dict,filename:str=None):
@@ -33,11 +39,13 @@ def save_weatherdatas_as_csv(row_data:dict,filename:str=None):
     filename:文件名称
     """
     if filename == None:
-        # 获取当前时间
-        current_time = datetime.now()
-        # 装欢为年月日时分秒格式
-        time_str = current_time.strftime(r"%Y%m%d%H%M%S")
-        filename = f'{time_str}.csv'
+        # # 获取当前时间
+        # current_time = datetime.now()
+        # # 装欢为年月日时分秒格式
+        # time_str = current_time.strftime(r"%Y%m%d%H%M%S")
+        # filename = f'{time_str}.csv'
+        default_name = default_filename()
+        filename = default_name+'.csv'
     else:
         filename = filename+'.csv'
     file_path = get_data_path('data',filename)
@@ -62,4 +70,20 @@ def save_weatherdatas_as_csv(row_data:dict,filename:str=None):
     
     df = pd.DataFrame(flattened)
     df.to_csv(file_path,index=False,encoding='utf-8-sig')
+    print(f'{filename}已保存至{file_path}')
+
+
+
+def save_airQdata_as_csv(row_data,filename:str=None):
+    """
+    将获得的空气质量数据保存为csv
+    """
+    if filename == None:
+        default_name = default_filename()
+        filename = default_name+'.csv'
+    else:
+        filename = filename+'.csv'
+
+    file_path = get_data_path('data',filename)
+    row_data.to_csv(file_path,index=False,encoding='utf-8-sig')
     print(f'{filename}已保存至{file_path}')
