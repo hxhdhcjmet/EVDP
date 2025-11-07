@@ -352,22 +352,6 @@ def get_815d_weather_data(city_code:str):
 #                 highest = highest.text.strip()
 #                 lowest = lowest.text.strip('/')# /10℃形式，把/去掉
 
-            
-        
-
-        
-       
-
-
-
-
-    
-
-
-
-        
-
-
 if __name__ == "__mian__":
     beijing = 101010100
     qingdao = 101120201
