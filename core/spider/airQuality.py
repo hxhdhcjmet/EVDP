@@ -1,13 +1,7 @@
 # 获取空气质量，目标网站：https://aqicn.org
 import pandas as pd
-from bs4 import BeautifulSoup
-from parsel import Selector
-from typing import List
 import requests
-import time 
-import re
 import json
-from playwright.sync_api import sync_playwright
 from datetime import datetime ,timedelta
 from utils import save_airQdata_as_csv as save
 
@@ -23,7 +17,7 @@ def data_get(city:str,position:str=None,token=TOKEN):
         key = city
 
     url = f'https://api.waqi.info/feed/{key}/?token={token}'
-    response = requests.get(HTTPS)
+    response = requests.get(url)
     
     if response.status_code == 200:
         row_data = response.json()
@@ -56,15 +50,33 @@ def data_get(city:str,position:str=None,token=TOKEN):
                 )
         df_result = pd.DataFrame([result])
         df_forecast = pd.DataFrame(forecast)
-        save(df_result,'北京今日天气状况')
-        save(df_forecast,'北京天气状况预测')
+
+        today = f'{key}今日空气质量'
+        forecast_name = f'{key}空气质量预测'
+        save(df_result,today)
+        save(df_forecast,forecast_name)
         
     else:
         print(f'网站打开失败,错误状态码{response.status_code}')
 
 
+def datas_get(citys:list):
+    """
+    多城市获取,把city列表或position列表作为参数传入
+    citys:包含城市名的列表
+    """
+    for city in citys:
+        if  not isinstance(city,str):
+            print(f'{city}不符合规范,请输入城市名')
+            continue
+        data_get(city)
+        
+
 
 if __name__ == '__main__':
-    data_get('beijing')
+
+    citys = ['qingdao',114514,'beijing','tokyo']
+    datas_get(citys)
+    
 
 
