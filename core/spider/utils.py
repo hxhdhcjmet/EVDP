@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import os
 from datetime import datetime
+from dataclasses import asdict
 
 
 def get_data_path(dir_name:str='data',filename:str=None):
@@ -87,3 +88,24 @@ def save_airQdata_as_csv(row_data,filename:str=None):
     file_path = get_data_path('data',filename)
     row_data.to_csv(file_path,index=False,encoding='utf-8-sig')
     print(f'{filename}已保存至{file_path}')
+
+
+def save_movie_info_as_csv(row_data,filename:str = None):
+    if filename is None:
+        filename = default_filename()
+    else:
+        filename = filename+'.csv'
+    file_path = get_data_path('data',filename)
+
+    try:
+        df = pd.DataFrame(row_data)
+
+        fixed_columns = [
+            '排名', '标题', "导演&主演&年份&地区&类型", '简介', '评分', '评价人数'
+        ]# 固定列
+
+        df = df.reindex(columns = fixed_columns,fill_value = '')
+        df.to_csv(file_path,index=False,encoding='utf-8-sig',na_rep='',sep=',',errors='ignore')
+        print(f'{filename}已保存至{file_path}')
+    except Exception as e:
+        print(f'保存失败:{e}')
