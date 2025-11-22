@@ -212,3 +212,6 @@ __marimo__/
 
 # data保存文件夹
 data/
+
+# json文件
+*.json
