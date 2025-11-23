@@ -14,6 +14,8 @@ from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor,as_compled
 from tqdm import tqdm
+from urllib.parse import urlparse
+from utils import get_image_name,get_data_path
 
 BASE_DIR = Path(__file__).resolve().parent # 脚本所在文件夹
 COOKIE_DIR = BASE_DIR / "cookies"
@@ -196,6 +198,53 @@ class TiebaImageDownloader:
         对图片链接去重
         """
         return list(set(image_urls))
+    
+
+    def download_single_image(self,url):
+        """
+        下载单张图片
+        """
+        try:
+            response = requests.get(url,headers = TIEBA_HEADERS,timeout = self.timeout,stream = True)
+            response.raise_for_status() # 抛出http错误
+
+            # 获取文件名称
+            filename = get_image_name(url,response)
+            save_path = os.path.join(self.save_dir,filename) # 创建贴吧图片下载文件夹
+
+            # 避免覆盖已有文件
+            if os.path.exists(save_path):
+                name,ext = os.path.splitext(filename)
+                save_path = os.path.join(self.save_dir, f"{name}_{int(time.time())}{ext}")
+
+            # 下载并保存图片
+            total_size = int (response.headers.get('content-length',0))
+            chunk_size = 1024 # 1kb
+            with open(save_path,'wb') as file,tqdm(desc = filename,
+            total = total_sizemunit = 'iB',
+            unit_scale = True,
+            unit_divisor = 1024,
+            leave = False) as procress_bar:
+                for chunk in response.iter_content(chunk_size = chunk_size):
+                    if chunk:
+                        file.write(chunk)
+                        procress_bar.update(len(chunk))
+            return True,url,save_path
+        except requests.exceptions.RequestException as e:
+            error_msg = f"网络问题:{str(e)}"
+            return false,url,error_msg
+        except Exception as e:
+            error_msg = f"未知问题:{str(e)}"
+            return false,url,error_msg
+
+            
+
+
+
+            
+
+
+
 
 
 
