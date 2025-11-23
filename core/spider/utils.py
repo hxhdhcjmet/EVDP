@@ -4,6 +4,8 @@ import pandas as pd
 import os
 from datetime import datetime
 from dataclasses import asdict
+from urllib.parse import urlparse
+import time
 
 
 def get_data_path(dir_name:str='data',filename:str=None):
@@ -22,9 +24,18 @@ def get_data_path(dir_name:str='data',filename:str=None):
     # 创建data文件夹（不存在时）
     os.makedirs(data_dir,exist_ok=True)
     # 获取最终文件路径
-    file_path = os.path.join(data_dir,filename)
-    return file_path
-
+    # 如果filename不是文件格式,则创建filename格式的文件夹
+    if filename == None:
+        # 如果文件名为空，则仅返回文件夹名
+        return data_dir
+    elif '.' not in filename:
+        file = os.path.join(data_dir,filename)
+        os.makedirs(file,exist_ok=True)
+        return file
+    else:
+        file_path = os.path.join(data_dir,filename)
+        return file_path
+    
 def default_filename():
     """
     创建默认文件名为当前时间
@@ -109,3 +120,34 @@ def save_movie_info_as_csv(row_data,filename:str = None):
         print(f'{filename}已保存至{file_path}')
     except Exception as e:
         print(f'保存失败:{e}')
+
+
+def get_image_name(url,response):
+    """
+    从url或响应获取文件名
+    """
+    parsed_url = urlparse(url)
+    filename = os.path.basename(parsed_url)
+
+    # url中没有文件名，则从相应处获取文件名
+    if not filename or '.' not in filename:
+        content = response.headers.get('content-disposition','')
+        filename = re.findall(r'filename="?([^";]+)"?', content_disposition)[0]
+
+    # 没有则生成默认文件名
+    if not filename or '.' not in filename:
+        filename = default_filename()
+
+    # 避免名字太长
+    if len(filename) > 100:
+        name,ext = os.path.splitext(filename)
+        filename = f"{name[:80]}_{int(time.time())}{ext}"
+
+    return filename
+    
+    
+    
+if __name__ == '__main__':
+    image = get_data_path()
+    print(type(image),image)
+    
