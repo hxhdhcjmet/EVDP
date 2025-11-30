@@ -126,17 +126,18 @@ def get_image_name(url,response):
     """
     从url或响应获取文件名
     """
-    parsed_url = urlparse(url)
-    filename = os.path.basename(parsed_url)
+    # parsed_url = urlparse(url)
+    # filename = os.path.basename(parsed_url)
 
     # url中没有文件名，则从相应处获取文件名
-    if not filename or '.' not in filename:
-        content = response.headers.get('content-disposition','')
-        filename = re.findall(r'filename="?([^";]+)"?', content_disposition)[0]
+    # if not filename or '.' not in filename:
+    #     content = response.headers.get('content-disposition','')
+    #     filename = re.findall(r'filename="?([^";]+)"?', content_disposition)[0]
 
     # 没有则生成默认文件名
+    filename = None
     if not filename or '.' not in filename:
-        filename = default_filename()
+        filename = default_filename()+'.jpg'
 
     # 避免名字太长
     if len(filename) > 100:
