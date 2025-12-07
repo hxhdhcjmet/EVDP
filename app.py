@@ -2,8 +2,11 @@
 from core import visualize as vs
 from core import PreProcessing as pre
 from core.predict import DataPredict as pred 
-from core import quickPlot as plt
+from core import quickPlot as qp
 from core.MultiRegression import MultiRegressionAnalyzer as multiregress
+from core.PCAAnalyzer import PCAAnalyzer
+from core.FactorAnalyzer import FactorAnalyzerSimple
+from core.ClusterAnalyzer import ClusterAnalyzer
 import streamlit as st
 from streamlit_drawable_canvas import st_canvas
 import numpy as np
@@ -61,6 +64,13 @@ if "multi_regression" not in st.session_state:
 
 if "multi_metrics_list" not in st.session_state:
     st.session_state.multi_metrics_list = [] # 多元回归指标
+
+if "pca_analyzer" not in st.session_state:
+    st.session_state.pca_analyzer = None
+if "factor_analyzer" not in st.session_state:
+    st.session_state.factor_analyzer = None
+if "cluster_analyzer" not in st.session_state:
+    st.session_state.cluster_analyzer = None
 
 
 
@@ -195,36 +205,45 @@ if st.session_state.raw_data is not None:
            # y_col_index=st.session_state.selected_data.columns.get_loc(y_col)#获取下标
     
     st.subheader("选择自变量(特征变量x)")
-    available_x_cols =[col for col in cols if col != y_col]
+    available_x_cols = [col for col in cols if (y_col is None or col != y_col)] if 'cols' in locals() else []
 
-    if regression_type == "单元回归":
-        # 单元回归，仅可选择1个自变量
-        x_cols = [st.selectbox(
-            "选择一个自变量",
-            options=available_x_cols,
-            index=None
-        )]
+    if y_col is None:
+        st.info("请先选择因变量")
+        x_cols = []
     else:
-        x_cols=st.multiselect(
-            "选择至少一个自变量",
-            options=available_x_cols,
-            default=[]#默认第一个
-        )
+        if regression_type == "单元回归":
+            if len(available_x_cols) == 0:
+                st.warning("当前数据列不足，请检查数据源")
+                x_cols = []
+            else:
+                x_cols = [st.selectbox(
+                    "选择一个自变量",
+                    options=available_x_cols
+                )]
+        else:
+            x_cols = st.multiselect(
+                "选择至少一个自变量",
+                options=available_x_cols,
+                default=[]
+            )
        # x_col_index = [st.session_state.selected_data.columns.get_loc(col) for col in x_cols] #获取下标
 
 
-    if regression_type is not None:
+    if regression_type is not None and y_col is not None and len(x_cols) > 0:
 
     # 初始化DataPredict实例
         if regression_type == "单元回归":
             if st.button("初始化插值拟合分析器"):
-                st.session_state.dp_instance=pred(
-                    data=st.session_state.selected_data,
-                    x_col=st.session_state.selected_data[x_cols],
-                    y_col=st.session_state.selected_data[y_col],
-                    n=10#插值倍数
-         )
-                st.success("分析器初始化成功！")
+                if len(x_cols) != 1:
+                    st.error("单元回归需且仅需选择一个自变量")
+                else:
+                    st.session_state.dp_instance = pred(
+                        data=st.session_state.selected_data,
+                        x_col=st.session_state.selected_data[x_cols[0]],
+                        y_col=st.session_state.selected_data[y_col],
+                        n=10
+                    )
+                    st.success("分析器初始化成功！")
      # 多元回归初始化       
         elif regression_type == "多元回归":
             if st.button("初始化多元回归器"):
@@ -309,10 +328,9 @@ if st.session_state.dp_instance is not None:
     
 
     # 设置多项式插值阶数
-    poly_degreee=1
     if "polynomial" in interp_method:
-        poly_degree=st.slider("多项式插值阶数",1,10,2)
-        st.session_state.dp_instance.degree=poly_degree#重置阶数
+        poly_degree = st.slider("多项式插值阶数",1,10,2)
+        st.session_state.dp_instance.degree = poly_degree
     
     if st.button("开始插值"):
         with st.spinner("正在插值..."):
@@ -325,9 +343,9 @@ if st.session_state.dp_instance is not None:
                 st.markdown("**插值结果预览**")
                 for method in interp_method:
                     if method in st.session_state.dp_instance.interpolated_results:
-                        inter_df=pd.DataFrame({
-                            "x":st.session_state.dp_instance.new_x[:10],
-                            f"{method}插值y值":st.session_state.dp_instance.interpolated_results[method][:10]
+                        inter_df = pd.DataFrame({
+                            "x": st.session_state.dp_instance.new_x[:10],
+                            f"{method}插值y值": st.session_state.dp_instance.interpolated_results[method][:10]
                         })
                         st.subheader(f"{method}插值:")
                         st.dataframe(inter_df)
@@ -337,57 +355,47 @@ if st.session_state.dp_instance is not None:
 #--------------------------------------
 #5.数据拟合
 #--------------------------------------
-if st.session_state.dp_instance is not None and st.session_state.interpolated: 
-    st.subheader("5.回归拟合") 
+    if st.session_state.dp_instance is not None and st.session_state.interpolated:
+        st.subheader("5.回归拟合")
 
-    # 选择拟合方法
-    fit_method=st.selectbox("选择拟合方法",["polynomial","random_forest"])
+        fit_method = st.selectbox("选择拟合方法", ["polynomial", "random_forest"]) 
 
-    # 设置多项式回归的拟合参数
-    fit_params={}
-    if fit_method=="polynomial":
-        fit_degree=st.slider("多项式回归阶数",1,10,2)
-        fit_params["degree"]=fit_degree
-    elif fit_method=="random_forest":
-        n_estimators=st.slider("随机森林树数量",50,200,100)
-        max_depth=st.slider("最大深度",1,20,5)
-        fit_params["random_forest_params"]={
+        fit_params = {}
+        if fit_method == "polynomial":
+            fit_degree = st.slider("多项式回归阶数", 1, 10, 2)
+            fit_params["degree"] = fit_degree
+        elif fit_method == "random_forest":
+            n_estimators = st.slider("随机森林树数量", 50, 200, 100)
+            max_depth = st.slider("最大深度", 1, 20, 5)
+            fit_params["random_forest_params"] = {
+                "n_estimators": n_estimators,
+                "max_depth": max_depth,
+                "random_state": 42,
+            }
 
-            "n_estimators":n_estimators,
-            "max_depth":max_depth,
-            "random_state":42
-        }
-    
-    # 执行拟合
-    if st.button("执行拟合"):
-        with st.spinner(f"执行{fit_method}拟合..."):
-            try:
-                result=st.session_state.dp_instance.train_model(
-                    method=fit_method,
-                    **fit_params
-                )
-                st.session_state.fitted=True
-                st.success("拟合完成！")
+        if st.button("执行拟合"):
+            with st.spinner(f"执行{fit_method}拟合..."):
+                try:
+                    result = st.session_state.dp_instance.train_model(method=fit_method, **fit_params)
+                    st.session_state.fitted = True
+                    st.success("拟合完成！")
 
-                #展示拟合指标
-                st.markdown("### 拟合指标")
-                col1,col2,col3=st.columns(3)
-                with col1:
-                    st.metric("训练集R^2",f"{result['r2_train']:.4f}")
-                    st.metric("测试集R^2",f"{result['r2_test']:.4f}")
-                with col2:
-                    st.metric("训练集RMSE",f"{result['rmse_train']:.4f}")
-                    st.metric("测试集RMSE",f"{result['rmse_test']:.4f}")
-                with col3:
-                    st.metric("训练集MSE",f"{result['mse_train']:.4f}")
-                    st.metric("测试集MSE",f"{result['mse_test']:.4f}")
+                    st.markdown("### 拟合指标")
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("训练集R^2", f"{result['r2_train']:.4f}")
+                        st.metric("测试集R^2", f"{result['r2_test']:.4f}")
+                    with col2:
+                        st.metric("训练集RMSE", f"{result['rmse_train']:.4f}")
+                        st.metric("测试集RMSE", f"{result['rmse_test']:.4f}")
+                    with col3:
+                        st.metric("训练集MSE", f"{result['mse_train']:.4f}")
+                        st.metric("测试集MSE", f"{result['mse_test']:.4f}")
 
-                # 多项式拟合表达式
-                if fit_method == "polynomial":
-                    st.latex(result["regression_expression"])
-                    
-            except Exception as e:
-                st.error(f"拟合失败:{str(e)}")
+                    if fit_method == "polynomial":
+                        st.latex(result["regression_expression"])
+                except Exception as e:
+                    st.error(f"拟合失败:{str(e)}")
 
 
 #--------------------------------------
@@ -450,9 +458,81 @@ if st.session_state.fitted:
         st.success(f"x={x_input}时,预测y值为:{y_pred:.4f}")
 
 
+if st.session_state.selected_data is not None:
+    st.subheader("7. 高级分析")
+    num_cols = st.session_state.selected_data.select_dtypes(include=["number"]).columns.tolist()
+    with st.expander("PCA 主成分分析", expanded=False):
+        pca_cols = st.multiselect("选择特征列", options=num_cols, default=num_cols[:2])
+        scale_opt = st.checkbox("标准化", value=True)
+        valid_pca = bool(pca_cols) and len(pca_cols) >= 2
+        if valid_pca:
+            n_comp = st.slider("成分个数", min_value=2, max_value=len(pca_cols), value=2)
+        else:
+            st.warning("至少选择两列数值特征")
+        if st.button("执行PCA"):
+            if valid_pca:
+                st.session_state.pca_analyzer = PCAAnalyzer(st.session_state.selected_data, pca_cols, n_components=n_comp, scale=scale_opt)
+                st.session_state.pca_analyzer.fit()
+                st.markdown("方差贡献率")
+                st.dataframe(pd.DataFrame({"成分": [f"PC{i+1}" for i in range(n_comp)], "解释方差比": st.session_state.pca_analyzer.explained_variance_ratio_}))
+                fig1 = st.session_state.pca_analyzer.plot_scree()
+                st.pyplot(fig1)
+                fig2 = st.session_state.pca_analyzer.plot_biplot()
+                if fig2 is not None:
+                    st.pyplot(fig2)
+            else:
+                st.warning("至少选择两列数值特征")
+    with st.expander("因子分析", expanded=False):
+        fa_cols = st.multiselect("选择特征列", options=num_cols, key="fa_cols", default=num_cols[:3])
+        scale_f = st.checkbox("标准化", value=True, key="fa_scale")
+        valid_fa = bool(fa_cols) and len(fa_cols) >= 2
+        if valid_fa:
+            n_f = st.slider("因子个数", min_value=2, max_value=len(fa_cols), value=2, key="fa_n")
+        else:
+            st.warning("至少选择两列数值特征")
+        if st.button("执行因子分析"):
+            if valid_fa:
+                st.session_state.factor_analyzer = FactorAnalyzerSimple(st.session_state.selected_data, fa_cols, n_factors=n_f, scale=scale_f)
+                st.session_state.factor_analyzer.fit()
+                fig = st.session_state.factor_analyzer.plot_loadings_heatmap()
+                if fig is not None:
+                    st.pyplot(fig)
+            else:
+                st.warning("至少选择两列数值特征")
+    with st.expander("聚类分析", expanded=False):
+        cl_cols = st.multiselect("选择特征列", options=num_cols, key="cl_cols", default=num_cols[:2])
+        method = st.selectbox("聚类方法", options=["KMeans", "层次聚类", "DBSCAN"], index=0)
+        scale_c = st.checkbox("标准化", value=True, key="cl_scale")
+
+        # 参数控件需在按钮前定义，避免回调后取不到值
+        kmeans_k = st.slider("簇数(KMeans/层次)", 2, 10, 3, key="kmeans_k")
+        agg_link = st.selectbox("链接方式(层次)", options=["ward", "complete", "average", "single"], index=0, key="agg_link")
+        db_eps = st.slider("eps(DBSCAN)", 0.1, 2.0, 0.5, 0.1, key="db_eps")
+        db_min = st.slider("min_samples(DBSCAN)", 3, 20, 5, key="db_min")
+
+        run_cluster = st.button("执行聚类")
+        if run_cluster:
+            if cl_cols and len(cl_cols) >= 2:
+                st.session_state.cluster_analyzer = ClusterAnalyzer(st.session_state.selected_data, cl_cols, scale=scale_c)
+                labels = None
+                if method == "KMeans":
+                    labels = st.session_state.cluster_analyzer.fit_kmeans(n_clusters=kmeans_k)
+                elif method == "层次聚类":
+                    labels = st.session_state.cluster_analyzer.fit_agglomerative(n_clusters=kmeans_k, linkage=agg_link)
+                else:
+                    labels = st.session_state.cluster_analyzer.fit_dbscan(eps=db_eps, min_samples=db_min)
+                st.session_state.selected_data["cluster_label"] = labels
+                st.dataframe(st.session_state.selected_data[[*cl_cols, "cluster_label"]].head())
+                fig = st.session_state.cluster_analyzer.plot_clusters()
+                if fig is not None:
+                    st.pyplot(fig)
+            else:
+                st.warning("至少选择两列数值特征")
+        
+
     
-
-
+    
+    
 
 
 
