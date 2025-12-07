@@ -5,10 +5,15 @@
 import requests
 import pandas as pd
 from bs4 import BeautifulSoup
-from parsel import Selector
 import re
 import time
-from utils import save_movie_info_as_csv as save
+try:
+    from .utils import save_movie_info_as_csv as save
+except ImportError:
+    try:
+        from core.spider.utils import save_movie_info_as_csv as save
+    except ImportError:
+        from utils import save_movie_info_as_csv as save
 
 URL = "https://movie.douban.com/top250"
 
@@ -124,5 +129,3 @@ def crawl_top250():
 
 if __name__ == '__main__':
     crawl_top250()
-
-

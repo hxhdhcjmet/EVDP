@@ -6,6 +6,7 @@ from datetime import datetime
 from dataclasses import asdict
 from urllib.parse import urlparse
 import time
+import hashlib
 
 
 def get_data_path(dir_name:str='data',filename:str=None):
@@ -123,27 +124,26 @@ def save_movie_info_as_csv(row_data,filename:str = None):
 
 
 def get_image_name(url,response):
-    """
-    从url或响应获取文件名
-    """
-    # parsed_url = urlparse(url)
-    # filename = os.path.basename(parsed_url)
-
-    # url中没有文件名，则从相应处获取文件名
-    # if not filename or '.' not in filename:
-    #     content = response.headers.get('content-disposition','')
-    #     filename = re.findall(r'filename="?([^";]+)"?', content_disposition)[0]
-
-    # 没有则生成默认文件名
-    filename = None
-    if not filename or '.' not in filename:
-        filename = default_filename()+'.jpg'
-
-    # 避免名字太长
+    ct = response.headers.get('Content-Type', '')
+    ext = '.jpg'
+    if 'png' in ct:
+        ext = '.png'
+    elif 'webp' in ct:
+        ext = '.webp'
+    elif 'jpeg' in ct or 'jpg' in ct:
+        ext = '.jpg'
+    parsed = urlparse(url)
+    base = os.path.basename(parsed.path)
+    if base and '.' in base:
+        name_part, ext_part = os.path.splitext(base)
+        if ext_part:
+            ext = ext_part
+    digest = hashlib.md5(response.content).hexdigest()[:8]
+    ts = default_filename()
+    filename = f"{ts}_{digest}{ext}"
     if len(filename) > 100:
-        name,ext = os.path.splitext(filename)
-        filename = f"{name[:80]}_{int(time.time())}{ext}"
-
+        name, ext2 = os.path.splitext(filename)
+        filename = f"{name[:80]}_{int(time.time())}{ext2}"
     return filename
     
     

@@ -3,10 +3,17 @@ import pandas as pd
 import requests
 import json
 from datetime import datetime ,timedelta
-from utils import save_airQdata_as_csv as save
+try:
+    from .utils import save_airQdata_as_csv as save
+except ImportError:
+    try:
+        from core.spider.utils import save_airQdata_as_csv as save
+    except ImportError:
+        from utils import save_airQdata_as_csv as save
 
 
-TOKEN = 'c427b66ab61b674787e65d025e6cac3e6b3b4183' # 输入获取到的token，可前往https://aqicn.org/data-platform/token/ 处申请
+import os
+TOKEN = os.getenv('WAQI_TOKEN', 'c427b66ab61b674787e65d025e6cac3e6b3b4183')
 HTTPS = f'https://api.waqi.info/feed/here/?token={TOKEN}' 
 
 
@@ -78,5 +85,4 @@ if __name__ == '__main__':
     citys = ['qingdao',114514,'beijing','tokyo']
     datas_get(citys)
     
-
 

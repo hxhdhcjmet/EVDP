@@ -12,7 +12,13 @@ from typing import List, Optional, Dict, Any
 from urllib.parse import urlparse, quote, parse_qs
 from bs4 import BeautifulSoup
 
-from .utils import get_image_name, get_data_path
+try:
+    from .utils import get_image_name, get_data_path
+except ImportError:
+    try:
+        from core.spider.utils import get_image_name, get_data_path
+    except ImportError:
+        from utils import get_image_name, get_data_path
 
 # 访问ua
 TIEBA_HEADERS={
@@ -402,5 +408,5 @@ def tieba_crawl_all(url: str, max_pages: int = 20):
 
 if __name__ == '__main__':
     # 测试
-    url = "https://tieba.baidu.com/p/8419121896"
-    tieba_crawl_all(url, max_pages=5)
+    url = "https://tieba.baidu.com/p/10266068882"
+    tieba_crawl_all(url, max_pages=10)

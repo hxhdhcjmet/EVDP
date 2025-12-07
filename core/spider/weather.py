@@ -8,7 +8,13 @@ import re
 import json
 from playwright.sync_api import sync_playwright
 from datetime import datetime ,timedelta
-from utils import save_weatherdatas_as_csv as save
+try:
+    from .utils import save_weatherdatas_as_csv as save
+except ImportError:
+    try:
+        from core.spider.utils import save_weatherdatas_as_csv as save
+    except ImportError:
+        from utils import save_weatherdatas_as_csv as save
 
 
 class Weather:
