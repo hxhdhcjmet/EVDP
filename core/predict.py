@@ -64,13 +64,16 @@ class DataPredict:
             raise ValueError('no original data')
         
         # 确保数据按时间排序
-        known_x=np.asarray(self.x_col)
-        known_y=np.asarray(self.y_col)
-        x_col_min=self.x_col.min()
-        x_col_max=self.x_col.max()
-        all_indices=np.linspace(start=x_col_min,stop=x_col_max,num=self.n*len(self.x_col),endpoint=True)
-        for value in all_indices:
-            self.new_x=np.append(self.new_x,value)
+        known_x = np.asarray(self.x_col).reshape(-1)
+        known_y = np.asarray(self.y_col).reshape(-1)
+        order = np.argsort(known_x)
+        known_x = known_x[order]
+        known_y = known_y[order]
+        self.new_x = np.array([])
+        x_col_min = float(np.min(known_x))
+        x_col_max = float(np.max(known_x))
+        all_indices = np.linspace(start=x_col_min, stop=x_col_max, num=self.n * len(known_x), endpoint=True)
+        self.new_x = all_indices
       
 
         # 线性插值
@@ -79,10 +82,9 @@ class DataPredict:
             self.interpolated_results['linear']=f_linear(all_indices)
         # 多项式插值    
         if 'polynomial' in methods:
-            #选取多项式次数,避免过度拟合
-            degree=self.set_polynomial_degree()#设置多项式次数         #min(5,len(known_x)-1) if known_x > 1 else 1
-            f_poly=interpolate.interp1d(known_x,known_y,kind='quadratic' if degree >=2 else 'linear')#最高次数小于2则用线性插值
-            self.interpolated_results['polynomial']=f_poly(all_indices)
+            degree = int(self.degree) if hasattr(self, 'degree') and self.degree is not None else 2
+            f_poly = interpolate.interp1d(known_x, known_y, kind='quadratic' if degree >= 2 else 'linear')
+            self.interpolated_results['polynomial'] = f_poly(all_indices)
         #样条插值
         if 'spline' in methods:
             if len(known_x)>=4: #样条插值至少需要4个点 
