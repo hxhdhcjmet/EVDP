@@ -215,3 +215,6 @@ data/
 
 # json文件
 *.json
+
+# html
+*.html
