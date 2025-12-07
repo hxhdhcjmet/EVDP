@@ -15,7 +15,11 @@ EVDP（Easy and Visually Achieve Data Process）是一个数据处理和可视�
 │   │   └── utils.py          # 爬虫工具函数
 │   ├── PreProcessing.py      # 数据预处理模块
 │   ├── visualize.py          # 数据可视化模块
-│   ├── predict.py            # 预测模块
+│   ├── predict.py            # 预测模块（单元回归、插值）
+│   ├── MultiRegression.py    # 多元回归模块（线性、PLS、Ridge）
+│   ├── PCAAnalyzer.py        # 主成分分析模块
+│   ├── FactorAnalyzer.py     # 因子分析模块（简化版）
+│   └── ClusterAnalyzer.py    # 聚类分析模块（KMeans/层次/DBSCAN）
 │   └── watermark_utils.py    # 水印工具模块
 ├── pages/                    # 页面模块
 │   └── visualize.py          # 可视化页面
@@ -45,7 +49,11 @@ EVDP（Easy and Visually Achieve Data Process）是一个数据处理和可视�
 ### 3. 数据处理功能
 - ✅ 数据预处理（PreProcessing.py）
 - ✅ 数据可视化（visualize.py）
-- ✅ 预测功能（predict.py）
+- ✅ 单元回归与插值（predict.py）
+- ✅ 多元回归（MultiRegression.py）：线性回归、PLS、Ridge，含指标与可视化
+- ✅ PCA 主成分分析（PCAAnalyzer.py）：方差贡献率、双标图
+- ✅ 因子分析（FactorAnalyzer.py）：载荷热图（简化实现）
+- ✅ 聚类分析（ClusterAnalyzer.py）：KMeans、层次聚类、DBSCAN 及散点可视化
 - ✅ 水印处理（watermark_utils.py）
 
 ## 优缺点分析
@@ -95,7 +103,7 @@ EVDP（Easy and Visually Achieve Data Process）是一个数据处理和可视�
 
 ## 技术栈
 - **编程语言**：Python
-- **Web框架**：（待确定）
+- **Web框架**：Streamlit
 - **爬虫库**：requests, BeautifulSoup
 - **数据处理**：pandas, numpy
 - **可视化**：matplotlib, seaborn（推测）
@@ -112,12 +120,47 @@ url = "https://tieba.baidu.com/p/8419121896"
 tieba_crawl_all(url, max_pages=5)  # 爬取5页内容
 ```
 
+## 最近更新（2025-12-06）
+
+- 统一爬虫模块导入：兼容两种运行方式，模块运行与直接脚本运行均可。
+  - 模块运行（推荐）：在项目根目录执行 `python -m core.spider.media`、`python -m core.spider.airQuality`、`python -m core.spider.movieTop250`
+  - 直接脚本运行：`python /home/EVDP/core/spider/media.py` 等也可正常执行
+- 图片命名策略优化：依据响应 `Content-Type`/URL 扩展名 + 时间戳 + 内容 MD5 前缀，避免同名覆盖与重复下载（实现位置：`core/spider/utils.py` 的 `get_image_name`）
+- 空气质量 Token 配置：支持通过环境变量覆盖，设置 `WAQI_TOKEN` 可替换默认值（实现位置：`core/spider/airQuality.py`）
+- 依赖精简：移除 `movieTop250.py` 未使用的 `parsel` 依赖，保证直接可运行
+- 输出目录统一：所有爬虫数据输出至 `/home/EVDP/data/...`，与项目规范保持一致
+
+### Streamlit 集成与高级分析新增（2025-12-07）
+- 新增分析模块文件：`core/PCAAnalyzer.py`、`core/FactorAnalyzer.py`、`core/ClusterAnalyzer.py`
+- 在 `app.py` 集成“7. 高级分析”分区，支持：
+  - PCA 主成分分析：方差贡献率表、柱状图与双标图（修复 Slider 边界问题：仅在选择≥2列时渲染成分数控件）
+  - 因子分析：因子载荷热图（修复 Slider 边界问题：仅在选择≥2列时渲染因子数控件）
+  - 聚类分析：KMeans、层次聚类、DBSCAN 与二维散点可视化（参数控件提前渲染，按钮回调稳定取值）
+- 单元回归与插值适配：
+  - `core/predict.py` 移除交互输入，使用 UI 设置的 `degree`；插值前对 `x` 排序并生成 `new_x`
+  - `app.py` 单元回归初始化仅接受单列 `Series` 作为 `x_col`，避免 `DataFrame` 引发插值错误
+- 修复 `app.py` 语法缩进错误：拟合区 `try/except` 与指标展示缩进一致，避免编译错误
+
+### 命令行运行示例
+- 贴吧爬虫：`python -m core.spider.media`
+- 空气质量爬虫：`python -m core.spider.airQuality`
+- 电影 Top250：`python -m core.spider.movieTop250`
+
 ## 后续计划
 1. 优先完善文档和测试
 2. 实现统一的用户界面
 3. 优化现有功能，提高稳定性和性能
 4. 开发新功能，扩展项目能力
 5. 建立定期维护机制，特别是爬虫模块
+
+### 注意事项
+- PCA/因子分析的成分数与因子数需基于已选特征列数量动态限定，避免 Slider 边界异常
+- 单元回归时必须选择一个且仅一个自变量；否则不初始化 `DataPredict`
+- 聚类参数控件需在按钮之前渲染，以确保回调中能正确读取参数值
+
+### 待办
+- 将高级分析图形统一接入 `pages/visualize.py` 的下载管线
+- 多元回归区添加“特征重要性”图按钮（调用 `core/MultiRegression.py:185`）
 
 ## 联系方式
 （待补充）
