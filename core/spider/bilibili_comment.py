@@ -7,6 +7,7 @@ import json
 from math import ceil
 import os
 import random
+from utils import get_data_path,default_filename
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "application/json, text/plain, */*",
@@ -16,15 +17,37 @@ TEST_LINK = r'https://www.bilibili.com/video/BV1RmiRBvEHx/'
 
 
 class Video_Comment_Extractor:
-    def __init__(self,link):
+    def __init__(self,link,filename =default_filename()):
         self.link = link
         self.view_api = r"https://api.bilibili.com/x/web-interface/view"
         self.comment_api = r"https://api.bilibili.com/x/v2/reply/main"
         self.reply_api = r'https://api.bilibili.com/x/v2/reply/reply'
+        self.filepath = get_data_path(filename=filename)
+
+    
+
+    def open_writer(self):
+        """
+        打开文件
+        """
+        self.fp = open(self.filepath,'w',encoding = 'utf-8')
+    def write_comment(self,data):
+        """
+        写入一条文件
+        """
+        self.fp.write(json.dumps(data,ensure_ascii=False)+'\n')
+        self.fp.flush()
+    def close_writer(self):
+        """
+        关闭文件
+        """
+        if hasattr(self,'fp'):
+            self.fp.close()
+
 
 
     def get_cookies(self):
-        cookie_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cookies', 'bilibili_cookie.json')
+        cookie_path = os.path.join("..",'spider','core')
         self.headers = HEADERS.copy()
 
         if not os.path.exists(cookie_path):
@@ -65,6 +88,7 @@ class Video_Comment_Extractor:
         except Exception as e:
             self.is_login = False
             print('登陆状态检测失败,按未登陆处理')
+    
 
 
     def extract_bv_id(self):
@@ -161,12 +185,52 @@ class Video_Comment_Extractor:
             print(f'发生错误:{str(e)}')
             return 0,0
         
+        
+    def extract_ip(self,reply):
+        """
+        根据登陆状态决定是否爬ip
+        """
+        if not self.is_login:
+            return None
+        return reply.get('reply_control',{}).get('location','')
 
     def get_sub_replies(self,root_rpid):
         """
-        根据爬取到的主评论加载
+        根据爬取到的主评论加载子评论
         """
-        pass
+        sub_replies = []
+        pn = 1
+
+        while True:
+            params = {
+            'oid':self.video_aid,
+            'type':1,
+            'root':root_rpid,
+            'pn':pn,
+            'ps':20
+            }
+
+            time.sleep(random.uniform(0.3,0.6))
+
+            resp = requests.get(self.reply_api,
+                                params = params,
+                                headers = self.headers,
+                                timeout = 10).json()
+            replies = resp.get('data',{}).get('replies',[])
+            if not replies:
+                break
+            for r in replies:
+                sub_replies.append({
+                    'comment': r['content']['message'],
+                    'likes':r['likes'],
+                    'user':r['member']['uname'],
+                    'level':r['member']['level_info']['current_level'],
+                    'ip':self.extract_ip(r)
+                    })
+            pn += 1
+        return sub_replies
+
+            
 
 
 
