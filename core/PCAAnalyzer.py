@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
+from core.visualize import apply_global_style, wrap_text, responsive_tight_layout
 
 class PCAAnalyzer:
     def __init__(self, data, feature_cols, n_components=2, scale=True):
@@ -27,26 +28,30 @@ class PCAAnalyzer:
         self.components_ = self.pca.components_
         self.explained_variance_ratio_ = self.pca.explained_variance_ratio_
 
-    def plot_scree(self, title="PCA方差贡献", x_label="成分", y_label="解释方差比"):
+    def plot_scree(self, title="PCA Variance Contribution", x_label="Component", y_label="Explained Variance Ratio"):
+        apply_global_style()
         fig, ax = plt.subplots(figsize=(8, 6))
         idx = np.arange(1, len(self.explained_variance_ratio_) + 1)
         sns.barplot(x=idx, y=self.explained_variance_ratio_, ax=ax)
         ax.set_xlabel(x_label)
         ax.set_ylabel(y_label)
         ax.set_title(title)
+        responsive_tight_layout(fig)
         return fig
 
-    def plot_biplot(self, title="PCA双标图", x_label="PC1", y_label="PC2"):
+    def plot_biplot(self, title="PCA Biplot", x_label="PC1", y_label="PC2"):
         if self.scores_ is None or self.components_ is None:
             return None
+        apply_global_style()
         fig, ax = plt.subplots(figsize=(8, 6))
         ax.scatter(self.scores_[:, 0], self.scores_[:, 1], alpha=0.7)
         scale = np.max(np.abs(self.scores_[:, :2])) if self.scores_.shape[1] >= 2 else 1.0
         for i, col in enumerate(self.feature_cols):
             ax.arrow(0, 0, self.components_[0, i] * scale, self.components_[1, i] * scale, color="r", alpha=0.5)
-            ax.text(self.components_[0, i] * scale * 1.05, self.components_[1, i] * scale * 1.05, col, fontsize=9)
+            ax.text(self.components_[0, i] * scale * 1.05, self.components_[1, i] * scale * 1.05, str(col), fontsize=9)
         ax.set_xlabel(x_label)
         ax.set_ylabel(y_label)
         ax.set_title(title)
         ax.grid(True)
+        responsive_tight_layout(fig)
         return fig
