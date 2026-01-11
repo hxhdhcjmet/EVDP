@@ -141,6 +141,20 @@ tieba_crawl_all(url, max_pages=5)  # 爬取5页内容
   - `app.py` 单元回归初始化仅接受单列 `Series` 作为 `x_col`，避免 `DataFrame` 引发插值错误
 - 修复 `app.py` 语法缩进错误：拟合区 `try/except` 与指标展示缩进一致，避免编译错误
 
+### 交互与可视化改进（2025-12-09）
+- 三步交互流程上线：
+  - 步骤一（数据加载）：进度指示与10秒超时读取（`core/ui_utils.py:load_file_with_timeout`），在 `app.py` 中展示加载状态
+  - 步骤二（清洗决策）：模态/单选确认清洗；显示质量评估报告（缺失统计与异常值检测，`core/ui_utils.py:quality_report`）
+  - 步骤三（分析选项）：插值/拟合/PCA 条件渲染与互斥/依赖校验（`core/ui_utils.py:validate_mutual_exclusive`、`validate_dependencies`）
+- 可视化中文显示统一：
+  - 全局字体自动选择：Windows 使用 `SimHei`，macOS 使用 `PingFang SC`，其他平台使用 `DejaVu Sans`（`core/visualize.py:apply_global_style`）
+  - 字号分级：标题14pt/轴标签12pt/图例10pt；图例弹性布局并限制最大宽度40%，长文本自动换行（`core/visualize.py:wrap_text`、`apply_legend_style`）
+  - 响应式布局：统一 `tight_layout` 封装（`core/visualize.py:responsive_tight_layout`）
+- 模块适配：
+  - PCA、聚类、PLS 绘图均采用统一样式与文本换行（`core/PCAAnalyzer.py`、`core/ClusterAnalyzer.py`、`core/MultiRegression.py`）
+- 测试补充：
+  - 新增 `tests/test_ui_utils.py` 覆盖文件加载、质量评估与互斥/依赖校验逻辑
+
 ### 命令行运行示例
 - 贴吧爬虫：`python -m core.spider.media`
 - 空气质量爬虫：`python -m core.spider.airQuality`
