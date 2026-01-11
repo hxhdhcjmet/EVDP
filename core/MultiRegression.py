@@ -9,6 +9,7 @@ from sklearn.preprocessing import StandardScaler # 标准化x^ = (x-mu)/sigma PL
 from sklearn.linear_model import LinearRegression, Ridge,Lasso # 多元线性回归
 from sklearn.cross_decomposition import PLSRegression # 偏最小二乘回归
 from sklearn.metrics import r2_score,mean_squared_error,mean_absolute_error # 评估指标
+from core.visualize import apply_global_style, wrap_text, apply_legend_style, responsive_tight_layout
 
 plt.rcParams["axes.unicode_minus"]=False # 负号可显示
 
@@ -150,6 +151,7 @@ class MultiRegressionAnalyzer:
         legend_actual:实际值图例
         legend_fit:插值图例
         """
+        apply_global_style()
         y_pred=self.predictions[model_name]
         fig=Figure(figsize=(12,5))
         ax=fig.add_subplot(121)
@@ -158,23 +160,21 @@ class MultiRegressionAnalyzer:
         # 第一幅图
         ax.scatter(self.y_test,y_pred,alpha=0.6,label=legend_autual)
         ax.plot([self.y.min(),self.y.max()],[self.y.min(),self.y.max()],'r--',label=legend_fit)
-        ax.set_xlabel(x_label)
-        ax.set_ylabel(y_label)
-        ax.set_title(title)
-        ax.legend()
+        ax.set_xlabel(wrap_text(x_label))
+        ax.set_ylabel(wrap_text(y_label))
+        ax.set_title(wrap_text(title))
+        apply_legend_style(ax)
         ax.grid(True)
 
         # 第二幅子图
         residuals = self.y_test- y_pred
         ax2.scatter(y_pred,residuals,alpha=0.6)
         ax2.axhline(y=0,color="r",linestyle="--")
-        ax2.set_xlabel("预测值")
-        ax2.set_ylabel("残差")
-        ax2.set_title("残差图")
+        ax2.set_xlabel("Predicted Values")
+        ax2.set_ylabel("Residuals")
+        ax2.set_title(wrap_text("Residual Plot"))
         ax2.grid(True)
-
-
-        fig.tight_layout()
+        responsive_tight_layout(fig)
         return fig
         
 
@@ -184,6 +184,7 @@ class MultiRegressionAnalyzer:
     
     def plot_feature_importance(self,model_name,title,x_label,y_label):
         """多元回归显示各分量的重要性"""
+        apply_global_style()
         model=self.models[model_name]
         fig,ax=plt.subplots(figsize=(8,6))
 
@@ -196,13 +197,15 @@ class MultiRegressionAnalyzer:
 
         sns.barplot(x=self.feature_cols,y=importance,ax=ax)
         ax.axhline(y=0,color="r",linestyle="--")
-        ax.set_xlabel(x_label)
-        ax.set_ylabel(var_label)
-        ax.set_title(title)
+        ax.set_xlabel(wrap_text(x_label))
+        ax.set_ylabel(wrap_text(var_label))
+        ax.set_title(wrap_text(title))
         plt.xticks(rotation=45)
+        responsive_tight_layout(fig)
         return fig
     
     def plot_pls_variance(self,model_name,title,x_label,y_label):
+        apply_global_style()
         model = self.models[model_name]
         if not isinstance(model,PLSRegression):
             raise ValueError("仅支持PLS回归模型")
@@ -214,11 +217,12 @@ class MultiRegressionAnalyzer:
         fig,ax=plt.subplots(figsize=(8,6))
         ax.plot(range(1,n_components+1),explained_X,"o-",label="X的累计解释方差")
         ax.plot(range(1,n_components+1),explained_y,"s-",label="y的累计解释方差")
-        ax.set_xlabel(x_label)
-        ax.set_ylabel(y_label)
-        ax.set_title(title)
-        ax.legend()
+        ax.set_xlabel(wrap_text(x_label))
+        ax.set_ylabel(wrap_text(y_label))
+        ax.set_title(wrap_text(title))
+        apply_legend_style(ax)
         ax.grid(alpha=0.3)
+        responsive_tight_layout(fig)
         return fig
     
     def get_metrics_df(self):
