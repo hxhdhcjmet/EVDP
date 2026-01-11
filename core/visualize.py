@@ -6,17 +6,94 @@ import seaborn as sns
 from typing import Optional,List
 from matplotlib import font_manager
 import re
+import platform
 
 
-# 设置中文
+def apply_global_style(prefer: str = "auto") -> None:
+    """CHANGED v2.1
+    Apply unified matplotlib/seaborn styles with Chinese font support.
 
+    Args:
+        prefer: Font family preference. "auto" detects OS and picks
+            SimHei on Windows, PingFang SC on macOS, DejaVu Sans on others.
+    """
+    system = platform.system()
+    candidates = [
+        "SimHei",
+        "PingFang SC",
+        "Noto Sans CJK SC",
+        "Source Han Sans SC",
+        "DejaVu Sans",
+    ]
+    if prefer != "auto":
+        candidates = [prefer] + candidates
+    # pick first available font from candidates
+    available = {f.name for f in font_manager.fontManager.ttflist}
+    font_family = None
+    for name in candidates:
+        if name in available:
+            font_family = name
+            break
+    if font_family is None:
+        font_family = "DejaVu Sans"
 
-plt.rcParams["font.family"] = ["SimHei"]
-plt.rcParams["font.serif"] = ["SimHei"]
-plt.rcParams["font.sans-serif"] = ["SimHei"]
-plt.rcParams['axes.unicode_minus'] = False
-sns.set_theme(font_scale=1.2)
-sns.set_style('whitegrid')
+    plt.rcParams["font.family"] = [font_family]
+    plt.rcParams["font.serif"] = [font_family]
+    plt.rcParams["font.sans-serif"] = [font_family]
+    plt.rcParams['axes.unicode_minus'] = False
+    plt.rcParams['axes.titlesize'] = 14
+    plt.rcParams['axes.labelsize'] = 12
+    plt.rcParams['legend.fontsize'] = 10
+    sns.set_theme(font_scale=1.0)
+    sns.set_style('whitegrid')
+
+def wrap_text(text: str, max_chars: int = 15) -> str:
+    """CHANGED v2.1
+    Wrap long text with newline every max_chars.
+
+    Args:
+        text: Input string
+        max_chars: Maximum characters per line
+
+    Returns:
+        Wrapped string suitable for legend/tick labels.
+    """
+    if not isinstance(text, str):
+        return str(text)
+    lines = [text[i:i+max_chars] for i in range(0, len(text), max_chars)]
+    return "\n".join(lines)
+
+def apply_legend_style(ax, max_width_ratio: float = 0.4, loc: str = "best") -> None:
+    """CHANGED v2.1
+    Apply legend styling with elastic layout.
+
+    Args:
+        ax: Matplotlib Axes
+        max_width_ratio: Maximum legend width relative to figure width
+        loc: Legend location
+    """
+    leg = ax.legend(loc=loc, frameon=True, fancybox=True)
+    if leg is not None:
+        leg.set_frame_alpha(0.8)
+        leg._legend_box.align = "left"
+        try:
+            fig = ax.figure
+            bbox = leg.get_window_extent(fig.canvas.get_renderer())
+            fig_w = fig.get_figwidth()
+            # approximate width control by setting ncol when too wide
+            if bbox.width / fig_w > max_width_ratio:
+                leg._ncols = 2
+        except Exception:
+            pass
+
+def responsive_tight_layout(fig) -> None:
+    """CHANGED v2.1
+    Ensure layout is tight and responsive across screen sizes.
+
+    Args:
+        fig: Matplotlib Figure
+    """
+    fig.tight_layout()
 
 class DataVisualizer:
     """
@@ -56,10 +133,10 @@ class DataVisualizer:
         for i, col in enumerate(columns, 1):
             plt.subplot(len(columns)//2 + 1, 2, i)
             sns.histplot(data=dataContent, x=col, kde=True)
-            plt.title(f'{col}的分布')
+            plt.title(f'{col} Distribution')
 
         plt.tight_layout()
-        save_path = f"{self.output_dir}/数值列分布直方图.png"
+        save_path = f"{self.output_dir}/numerical_columns_histogram.png"
         plt.savefig(save_path, dpi=300)
         plt.close()
         print(f"have been saved to {save_path}")
@@ -78,10 +155,10 @@ class DataVisualizer:
         plt.figure(figsize=(12, 6))
         sns.boxplot(data=dataContent[columns])
         plt.xticks(rotation=45)
-        plt.title('数值列箱线图（异常值检测）')
+        plt.title('Numerical Columns Boxplot (Outlier Detection)')
         
         plt.tight_layout()
-        save_path = f"{self.output_dir}/数值列箱线图.png"
+        save_path = f"{self.output_dir}/numerical_columns_boxplot.png"
         plt.savefig(save_path, dpi=300)
         plt.close()
         print(f"have been saved to  {save_path}")
@@ -100,10 +177,10 @@ class DataVisualizer:
         plt.figure(figsize=(10, 8))
         corr = dataContent[columns].corr()
         sns.heatmap(corr, annot=True, cmap='coolwarm', fmt='.2f', linewidths=0.5)
-        plt.title('数值列相关性热图')
+        plt.title('Numerical Columns Correlation Heatmap')
         
         plt.tight_layout()
-        save_path = f"{self.output_dir}/相关性热图.png"
+        save_path = f"{self.output_dir}/correlation_heatmap.png"
         plt.savefig(save_path, dpi=300)
         plt.close()
         print(f"have been saved to {save_path}")
@@ -124,10 +201,10 @@ class DataVisualizer:
                 plt.figure(figsize=(8, 5))
                 sns.countplot(data=dataContent, x=col)
                 plt.xticks(rotation=45)
-                plt.title(f'{col}的类别分布')
+                plt.title(f'{col} Category Distribution')
                 
                 plt.tight_layout()
-                save_path = f"{self.output_dir}/{col}_类别分布.png"
+                save_path = f"{self.output_dir}/{col}_category_distribution.png"
                 plt.savefig(save_path, dpi=300)
                 plt.close()
                 print(f"the {col} category figurehave been saved to {save_path}")
@@ -149,10 +226,10 @@ class DataVisualizer:
         
         plt.figure(figsize=(8, 6))
         sns.scatterplot(data=df, x=x_col, y=y_col, alpha=0.7)
-        plt.title(f'{x_col}与{y_col}的散点图')
+        plt.title(f'{x_col} vs {y_col} Scatter Plot')
         
         plt.tight_layout()
-        save_path = f"{x_col}_vs_{y_col}_散点图.png"
+        save_path = f"{x_col}_vs_{y_col}_scatter.png"
         save_path=self.save_path_check(save_path)
         save_path=self.output_dir+'/'+save_path
         plt.savefig(save_path, dpi=300)

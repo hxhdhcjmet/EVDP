@@ -327,9 +327,9 @@ class DataPredict:
         residuals=y-y_pred
         ax2.scatter(y_pred,residuals,color='green')# 残差图
         ax2.axhline(y=0,color='red',linestyle='--')
-        ax2.set_xlabel('预测值')
-        ax2.set_ylabel('残差')
-        ax2.set_title('残差')
+        ax2.set_xlabel('Predicted Values')
+        ax2.set_ylabel('Residuals')
+        ax2.set_title('Residual Plot')
         ax2.grid(True)
 
         fig.tight_layout()

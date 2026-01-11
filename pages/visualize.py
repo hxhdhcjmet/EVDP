@@ -6,6 +6,7 @@ from io import BytesIO,StringIO
 from PIL import Image
 from core.predict import DataPredict as pred
 from core import watermark_utils as wm
+from core.visualize import apply_global_style
 
 
 
@@ -15,8 +16,7 @@ st.set_page_config(
     layout="wide"
 )
 st.title("拟合数据可视化与图片下载")
-plt.rcParams['font.family']=['SimHei']
-plt.rcParams['axes.unicode_minus']=False
+apply_global_style()
 
 def save_fig(fig,format='png',dpi=300):
     """
@@ -59,15 +59,15 @@ elif st.session_state.multi_regression is not None:
     with st.expander("点击展开自定义内容(或者不设置,使用默认值)",expanded=True):
         col1,col2,col3=st.columns(3)
         with col1:
-            plot_title=st.text_input("标题",value=f"{fit_method}拟合结果可视化")
-            x_label=st.text_input("x坐标名称",value='X')
-            y_label=st.text_input("y坐标名称",value='Y')
+            plot_title=st.text_input("Plot Title",value=f"{fit_method} Fitting Visualization")
+            x_label=st.text_input("X Axis Label",value='X')
+            y_label=st.text_input("Y Axis Label",value='Y')
         with col2:
-            # 图例
-            legend_actual=st.text_input("实际值图例",value="实际数据点")
-            legend_fit=st.text_input("拟合曲线图例",value="拟合曲线")
-            # 图片格式与DPI:
-            img_format=st.selectbox("保存格式",["png","pdf","svg"],index=0)
+            # Legend
+            legend_actual=st.text_input("Actual Value Legend",value="Actual Data Points")
+            legend_fit=st.text_input("Fitted Curve Legend",value="Fitted Curve")
+            # Image format and DPI:
+            img_format=st.selectbox("Save Format",["png","pdf","svg"],index=0)
             img_dpi=st.slider("图片清晰度",100,600,300)
         
         with col3:

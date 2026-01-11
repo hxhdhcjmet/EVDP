@@ -1,5 +1,7 @@
 
 from core import visualize as vs
+from core.visualize import apply_global_style
+from core.ui_utils import quality_report, validate_mutual_exclusive, validate_dependencies, load_file_with_timeout
 from core import PreProcessing as pre
 from core.predict import DataPredict as pred 
 from core import quickPlot as qp
@@ -13,6 +15,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
+import logging
 
 #--------------------------------------
 #页面配置
@@ -23,7 +26,10 @@ st.set_page_config(
     
 )
 st.title("数据处理与拟合web工具")
+apply_global_style()
 st.markdown("点击/拖拽添加数据,自动处理、拟合与可视化")
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("evdp")
 #--------------------------------------
 
 #--------------------------------------
@@ -75,13 +81,22 @@ if "cluster_analyzer" not in st.session_state:
 
 
 
-def validate_selection(regression_type,x_cols,y_col):
-    """回归模型、自变量和因变量选择合理性检验"""
-    errors=[]
+def validate_selection(regression_type: str, x_cols: list[str], y_col: str) -> list[str]:
+    """CHANGED v2.1
+    Validate regression type and selected columns.
+
+    Args:
+        regression_type: 回归类型
+        x_cols: 自变量列
+        y_col: 因变量列
+
+    Returns:
+        错误信息列表
+    """
+    errors = []
     if y_col in x_cols:
         errors.append("因变量不能与自变量相同！")
-    
-    if regression_type == "单元回归" and len(x_cols)!=1:
+    if regression_type == "单元回归" and len(x_cols) != 1:
         errors.append("单元回归仅可选择一个自变量！")
     if regression_type == "多元回归" and len(x_cols) < 1:
         errors.append("多元回归需选择至少一个自变量！")
@@ -89,7 +104,7 @@ def validate_selection(regression_type,x_cols,y_col):
 #--------------------------------------
 #1.数据收集模块
 #--------------------------------------
-st.subheader("1. 数据输入")
+st.subheader("步骤一：数据加载")
 input_col1, input_col2 = st.columns(2)
 
 with input_col1:
@@ -118,54 +133,66 @@ with input_col2:
     st.markdown("**方式2:上传csv/Excel文件**")
     uploaded_file = st.file_uploader("选择一个文件", type=["csv", "xlsx"])
     if uploaded_file is not None:
-        # 读取上传得文件
-       try:
-           if uploaded_file.name.endswith(".csv"):
-               data=pd.read_csv(uploaded_file)
-           else:
-               data=pd.read_excel(uploaded_file)
-
-          #data=pre.load_data(uploaded_file)
-          # data=pre.load_data(uploaded_file)
-           if data is None or not isinstance(data,pd.DataFrame):
-              raise ValueError("文件读取失败,未返回有效的数据表格")
-           st.session_state.raw_data=data
-           st.success("文件读取成功！")
-           st.dataframe(st.session_state.raw_data.head())#预览前面部分
-       except Exception as e:
-           st.error(f"文件读取失败: {e}")
+        prog = st.progress(0)
+        try:
+            for i in range(0, 100, 10):
+                prog.progress(i)
+            data = load_file_with_timeout(uploaded_file, timeout=10)
+            prog.progress(100)
+            if data is None or not isinstance(data, pd.DataFrame):
+                raise ValueError("文件读取失败,未返回有效的数据表格")
+            st.session_state.raw_data = data
+            st.success("文件读取成功！")
+            st.dataframe(st.session_state.raw_data.head())
+        except Exception as e:
+            prog.progress(0)
+            st.error(f"文件读取失败或超时: {e}")
+            logger.error("load_file_failed", exc_info=True)
 
 #--------------------------------------
 #2.数据清洗模块
 #--------------------------------------
-st.subheader("2. 数据清洗")
+st.subheader("步骤二：清洗决策与质量评估")
 if not st.session_state.raw_data.empty:
-    if st.button("清洗数据",type="primary"):
+    open_modal = st.button("选择是否清洗数据")
+    if open_modal and hasattr(st, "dialog"):
+        @st.dialog("清洗选择")
+        def _clean_choice_dialog():
+            choice = st.radio("是否进行清洗", ["是", "否"], index=0)
+            confirm = st.button("确认")
+            if confirm:
+                st.session_state.clean_choice = choice == "是"
+                st.rerun()
+    else:
+        st.info("请选择是否清洗数据")
+        choice = st.radio("是否进行清洗", ["是", "否"], index=1, key="clean_choice_radio")
+        confirm = st.button("确认清洗选择")
+        if confirm:
+            st.session_state.clean_choice = choice == "是"
+
+    target_df = st.session_state.raw_data
+    if st.session_state.get("clean_choice", False):
         with st.spinner("正在清洗数据..."):
             try:
-                st.session_state.cleaned_data=pre.clean_data(st.session_state.raw_data)#使用PreProcressing模块清洗数据
-                st.success(
-                    f"数据清洗完成！\n"
-                    f"原始数据:{len(st.session_state.raw_data)}行"
-                    f"清洗后数据:{len(st.session_state.cleaned_data)}行"
-                )
+                st.session_state.cleaned_data = pre.clean_data(st.session_state.raw_data)
+                target_df = st.session_state.cleaned_data
+                st.success("数据清洗完成！")
             except Exception as e:
                 st.error(f"清洗失败:{str(e)}")
-            
-    
-    #显示清洗后的数据
-    if st.session_state.cleaned_data is not None:
-        st.markdown("**清洗后的数据预览**")
-        st.dataframe(st.session_state.cleaned_data,height=200)
-    else:
-        st.warning("请先上传或添加数据，并点击'清洗数据'按钮")
+                logger.error("clean_data_failed", exc_info=True)
+    rep = quality_report(target_df)
+    st.markdown("数据质量评估报告")
+    st.markdown("缺失值统计")
+    st.dataframe(rep["missing"], height=200)
+    st.markdown("异常值检测")
+    st.dataframe(rep["outliers"], height=200)
 
 
 #--------------------------------------
 #3.选择数据源(原始数据/清洗后数据)
 #--------------------------------------
 if st.session_state.raw_data is not None:
-    st.subheader("3. 选择数据源")
+    st.subheader("步骤三：分析选项与数据源")
     data_options=["原始数据"]
     if st.session_state.cleaned_data is not None:
         data_options.append("清洗后的数据")#确定可用数据源有没有清洗后数据
@@ -256,6 +283,35 @@ if st.session_state.raw_data is not None:
                 st.success("多元回归器初始化成功！")
 
 #--------------------------------------
+# 动态选项面板与互斥校验
+#--------------------------------------
+if st.session_state.selected_data is not None:
+    st.subheader("分析选项")
+    opt_cols = st.columns(3)
+    with opt_cols[0]:
+        opt_interp = st.checkbox("插值", value=st.session_state.get("opt_interp", False))
+    with opt_cols[1]:
+        opt_fit = st.checkbox("拟合", value=st.session_state.get("opt_fit", False))
+    with opt_cols[2]:
+        opt_pca = st.checkbox("PCA", value=st.session_state.get("opt_pca", False))
+    chosen = {"插值": opt_interp, "拟合": opt_fit, "PCA": opt_pca}
+    selected_opts = {k for k, v in chosen.items() if v}
+    st.session_state.opt_interp = opt_interp
+    st.session_state.opt_fit = opt_fit
+    st.session_state.opt_pca = opt_pca
+    errors = validate_mutual_exclusive(selected_opts)
+    dep_errors = validate_dependencies(selected_opts, {
+        "dp_ready": st.session_state.dp_instance is not None,
+        "interpolated": st.session_state.get("interpolated", False)
+    })
+    all_err = errors + dep_errors
+    if all_err:
+        for e in all_err:
+            st.error(e)
+    else:
+        st.success("选项校验通过")
+
+#--------------------------------------
 #4多元回归
 #--------------------------------------
 if st.session_state.multi_regression is not None:
@@ -316,7 +372,7 @@ if st.session_state.multi_regression is not None:
 #--------------------------------------
 #4插值处理
 #--------------------------------------
-if st.session_state.dp_instance is not None:
+if st.session_state.dp_instance is not None and st.session_state.get("opt_interp", False):
     st.subheader("4.数据插值")
 
     #选择插值方法
@@ -351,11 +407,12 @@ if st.session_state.dp_instance is not None:
                         st.dataframe(inter_df)
             except Exception as e:
                 st.error(f"插值失败:{str(e)}")
+                logger.error("interpolate_failed", exc_info=True)
 
 #--------------------------------------
 #5.数据拟合
 #--------------------------------------
-    if st.session_state.dp_instance is not None and st.session_state.interpolated:
+    if st.session_state.get("opt_fit", False) and st.session_state.dp_instance is not None and st.session_state.interpolated:
         st.subheader("5.回归拟合")
 
         fit_method = st.selectbox("选择拟合方法", ["polynomial", "random_forest"]) 
@@ -396,6 +453,7 @@ if st.session_state.dp_instance is not None:
                         st.latex(result["regression_expression"])
                 except Exception as e:
                     st.error(f"拟合失败:{str(e)}")
+                    logger.error("fit_failed", exc_info=True)
 
 
 #--------------------------------------
@@ -458,7 +516,7 @@ if st.session_state.fitted:
         st.success(f"x={x_input}时,预测y值为:{y_pred:.4f}")
 
 
-if st.session_state.selected_data is not None:
+if st.session_state.selected_data is not None and st.session_state.get("opt_pca", False):
     st.subheader("7. 高级分析")
     num_cols = st.session_state.selected_data.select_dtypes(include=["number"]).columns.tolist()
     with st.expander("PCA 主成分分析", expanded=False):
@@ -472,14 +530,18 @@ if st.session_state.selected_data is not None:
         if st.button("执行PCA"):
             if valid_pca:
                 st.session_state.pca_analyzer = PCAAnalyzer(st.session_state.selected_data, pca_cols, n_components=n_comp, scale=scale_opt)
-                st.session_state.pca_analyzer.fit()
-                st.markdown("方差贡献率")
-                st.dataframe(pd.DataFrame({"成分": [f"PC{i+1}" for i in range(n_comp)], "解释方差比": st.session_state.pca_analyzer.explained_variance_ratio_}))
-                fig1 = st.session_state.pca_analyzer.plot_scree()
-                st.pyplot(fig1)
-                fig2 = st.session_state.pca_analyzer.plot_biplot()
-                if fig2 is not None:
-                    st.pyplot(fig2)
+                try:
+                    st.session_state.pca_analyzer.fit()
+                    st.markdown("Variance Contribution Rate")
+                    st.dataframe(pd.DataFrame({"Component": [f"PC{i+1}" for i in range(n_comp)], "Explained Variance Ratio": st.session_state.pca_analyzer.explained_variance_ratio_}))
+                    fig1 = st.session_state.pca_analyzer.plot_scree()
+                    st.pyplot(fig1)
+                    fig2 = st.session_state.pca_analyzer.plot_biplot()
+                    if fig2 is not None:
+                        st.pyplot(fig2)
+                except Exception:
+                    st.error("PCA execution failed")
+                    logger.error("pca_failed", exc_info=True)
             else:
                 st.warning("至少选择两列数值特征")
     with st.expander("因子分析", expanded=False):
@@ -493,10 +555,14 @@ if st.session_state.selected_data is not None:
         if st.button("执行因子分析"):
             if valid_fa:
                 st.session_state.factor_analyzer = FactorAnalyzerSimple(st.session_state.selected_data, fa_cols, n_factors=n_f, scale=scale_f)
-                st.session_state.factor_analyzer.fit()
-                fig = st.session_state.factor_analyzer.plot_loadings_heatmap()
-                if fig is not None:
-                    st.pyplot(fig)
+                try:
+                    st.session_state.factor_analyzer.fit()
+                    fig = st.session_state.factor_analyzer.plot_loadings_heatmap()
+                    if fig is not None:
+                        st.pyplot(fig)
+                except Exception:
+                    st.error("因子分析失败")
+                    logger.error("fa_failed", exc_info=True)
             else:
                 st.warning("至少选择两列数值特征")
     with st.expander("聚类分析", expanded=False):
@@ -514,18 +580,22 @@ if st.session_state.selected_data is not None:
         if run_cluster:
             if cl_cols and len(cl_cols) >= 2:
                 st.session_state.cluster_analyzer = ClusterAnalyzer(st.session_state.selected_data, cl_cols, scale=scale_c)
-                labels = None
-                if method == "KMeans":
-                    labels = st.session_state.cluster_analyzer.fit_kmeans(n_clusters=kmeans_k)
-                elif method == "层次聚类":
-                    labels = st.session_state.cluster_analyzer.fit_agglomerative(n_clusters=kmeans_k, linkage=agg_link)
-                else:
-                    labels = st.session_state.cluster_analyzer.fit_dbscan(eps=db_eps, min_samples=db_min)
-                st.session_state.selected_data["cluster_label"] = labels
-                st.dataframe(st.session_state.selected_data[[*cl_cols, "cluster_label"]].head())
-                fig = st.session_state.cluster_analyzer.plot_clusters()
-                if fig is not None:
-                    st.pyplot(fig)
+                try:
+                    labels = None
+                    if method == "KMeans":
+                        labels = st.session_state.cluster_analyzer.fit_kmeans(n_clusters=kmeans_k)
+                    elif method == "层次聚类":
+                        labels = st.session_state.cluster_analyzer.fit_agglomerative(n_clusters=kmeans_k, linkage=agg_link)
+                    else:
+                        labels = st.session_state.cluster_analyzer.fit_dbscan(eps=db_eps, min_samples=db_min)
+                    st.session_state.selected_data["cluster_label"] = labels
+                    st.dataframe(st.session_state.selected_data[[*cl_cols, "cluster_label"]].head())
+                    fig = st.session_state.cluster_analyzer.plot_clusters()
+                    if fig is not None:
+                        st.pyplot(fig)
+                except Exception:
+                    st.error("聚类分析失败")
+                    logger.error("cluster_failed", exc_info=True)
             else:
                 st.warning("至少选择两列数值特征")
         

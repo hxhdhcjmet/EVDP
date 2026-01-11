@@ -30,7 +30,7 @@ def pointLineChart(x,y,xlabel='x',ylabel='y',title='pointLineChart',color='blue'
     ax.plot(x,y)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
-    ax.set_title('line chart')
+    ax.set_title(title)
     ax.grid(showgrid)
     if save:
         savePlot(fig,title,None,saveFormat)
