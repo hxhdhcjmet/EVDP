@@ -27,11 +27,11 @@ class FactorAnalyzerSimple:
         self.loadings_ = eigvecs[:, : self.n_factors] * np.sqrt(eigvals[: self.n_factors])
         self.scores_ = X @ eigvecs[:, : self.n_factors]
 
-    def plot_loadings_heatmap(self, title="因子载荷热图"):
+    def plot_loadings_heatmap(self, title="Factor Loadings Heatmap"):
         if self.loadings_ is None:
             return None
         fig, ax = plt.subplots(figsize=(8, 6))
-        df = pd.DataFrame(self.loadings_, index=self.feature_cols, columns=[f"因子{i+1}" for i in range(self.n_factors)])
+        df = pd.DataFrame(self.loadings_, index=self.feature_cols, columns=[f"Factor {i+1}" for i in range(self.n_factors)])
         sns.heatmap(df, annot=True, cmap="coolwarm", fmt=".2f", ax=ax)
         ax.set_title(title)
         return fig
