@@ -5,12 +5,14 @@ import re
 import time
 import json
 from math import ceil
+import os
+import random
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "application/json, text/plain, */*",
     }
 
-TEST_LINK = r'https://www.bilibili.com/video/BV1xErKBfETy'
+TEST_LINK = r'https://www.bilibili.com/video/BV1RmiRBvEHx/'
 
 
 class Video_Comment_Extractor:
@@ -18,6 +20,52 @@ class Video_Comment_Extractor:
         self.link = link
         self.view_api = r"https://api.bilibili.com/x/web-interface/view"
         self.comment_api = r"https://api.bilibili.com/x/v2/reply/main"
+        self.reply_api = r'https://api.bilibili.com/x/v2/reply/reply'
+
+
+    def get_cookies(self):
+        cookie_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cookies', 'bilibili_cookie.json')
+        self.headers = HEADERS.copy()
+
+        if not os.path.exists(cookie_path):
+            print('未检测到Cooke文件,使用匿名模式')
+            self.is_login = False
+            return
+        
+        try:
+            with open(cookie_path,'r',encoding = 'utf-8') as f:
+                cookie = json.load(f)
+                self.headers['Cookie'] = cookie.get('cookie','')
+            print(f"成功加载Cookie:{cookie['cookie'][:10]}...")
+            self.check_login_status() # 检测登陆状态
+        except Exception as e:
+            print(f'cookie获取失败:{str(e)}')
+            self.is_login = False
+    
+
+    def check_login_status(self):
+        """
+        检测当前是否为登录态
+        """
+        test_api = r'https://api.bilibili.com/x/web-interface/nav'
+        print('检测登陆状态中...')
+        time.sleep(random.uniform(0.1,0.5))
+        try:
+            resp = requests.get(
+                test_api,
+                headers = self.headers,
+                timeout = 10
+                ).json()
+            if resp.get('code' == 0) and resp.get('data',{}).get('isLogin'):
+                self.is_login = True
+                print(f"登陆成功:{resp['data']['uname']}")
+            else:
+                self.is_login = False
+                print('当前为未登陆状态,将不保存IP属地信息')
+        except Exception as e:
+            self.is_login = False
+            print('登陆状态检测失败,按未登陆处理')
+
 
     def extract_bv_id(self):
         """
@@ -39,10 +87,12 @@ class Video_Comment_Extractor:
 
         print('获取视频aid中...')
         params = {'bvid':bv_id}
+        # 随机停顿
+        time.sleep(random.uniform(0.1,0.5))
         
         try:
             # 发送请求获取视频信息
-            response= requests.get(self.view_api,params = params,headers = HEADERS,timeout = 10)
+            response= requests.get(self.view_api,params = params,headers = self.headers,timeout = 10)
             response.raise_for_status()
             video_data = response.json()
 
@@ -53,7 +103,7 @@ class Video_Comment_Extractor:
                 self.video_aid = aid
                 return aid
             else:
-                print(f'获取视频信息失败,错误信息:{video_data.get('message')}')
+                print(f"获取视频信息失败,错误信息:{video_data.get('message')}")
                 self.video_aid = None
                 return None
         except Exception as e:
@@ -64,10 +114,12 @@ class Video_Comment_Extractor:
     def get_total_comments_and_pages(self,order = 'hot'):
         """
         获取评论总数
-        排序依据:order:hot(最热)、time(最新)、reply(最多回复)
+        排序依据:order:hot(最热)、time(最新)
         """
         # 先获取bv
         self.extract_bv_id()
+        # 加载cookie
+        self.get_cookies()
         # 再获取aid
         aid = self.get_video_aid(self.bv_id)
         if not aid:
@@ -80,8 +132,10 @@ class Video_Comment_Extractor:
             'ps':20,
             'order':order
             }
+        # 随机停顿
+        time.sleep(random.uniform(0.1,0.5))
         try:
-            response = requests.get(self.comment_api,params = params,headers = HEADERS,timeout = 10)
+            response = requests.get(self.comment_api,params = params,headers = self.headers,timeout = 10)
             response.raise_for_status()
             comment_json = response.json()
             if comment_json.get('code') != 0 or not comment_json.get('data'):
@@ -89,10 +143,11 @@ class Video_Comment_Extractor:
                 return 0,0
             
             # 提取总评论数和总页数
-            page_data = comment_json['data'].get('page',{})
-            total_count = page_data.get('count',0) # 总评论数
-            page_size = page_data.get('ps',20) # 每页条数
-            total_pages = ceil(total_count / page_size) if total_count > 0 else 0 # 总页数
+            data = comment_json.get('data',{})
+            cursor = data.get('cursor',{})
+            total_count = cursor.get('all_count',0)
+            page_size = params['ps']
+            total_pages = ceil(total_count / page_size) if total_count else 0
             print('总评论数获取成功!')
             print(f'总页数:{total_pages}')
             print(f'总评论数:{total_count}')
@@ -105,6 +160,13 @@ class Video_Comment_Extractor:
         except Exception as e:
             print(f'发生错误:{str(e)}')
             return 0,0
+        
+
+    def get_sub_replies(self,root_rpid):
+        """
+        根据爬取到的主评论加载
+        """
+        pass
 
 
 
