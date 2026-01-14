@@ -13,16 +13,29 @@ HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/
         "Accept": "application/json, text/plain, */*",
     }
 
-TEST_LINK = r'https://www.bilibili.com/video/BV1RmiRBvEHx/'
+TEST_LINK = r'https://www.bilibili.com/video/BV1ggrKBKEAD/?spm_id_from=333.1007.tianma.5-3-16.click&vd_source=903caa43b134dc6c594281212f0d6dee'
 
 
 class Video_Comment_Extractor:
-    def __init__(self,link,filename =default_filename()):
+    def __init__(self,link,filename = default_filename()):
         self.link = link
         self.view_api = r"https://api.bilibili.com/x/web-interface/view"
         self.comment_api = r"https://api.bilibili.com/x/v2/reply/main"
         self.reply_api = r'https://api.bilibili.com/x/v2/reply/reply'
-        self.filepath = get_data_path(filename=filename)
+
+        file_path = get_data_path(filename = filename) # 这里创建的是文件夹,需要进一步创建一个同名文件
+        save_file_name = filename+'.json'
+        full_file_path = os.path.join(file_path,save_file_name)
+        try:
+            with open(full_file_path,'x',encoding = 'utf-8') as f:
+                pass
+            print(f'初始化成功,保存文件路径:{full_file_path},数据文件与文件夹同名,为:{save_file_name}')
+        except FileExistsError:
+            print('保存文件已存在,将不重复创建!')
+        except Exception as e:
+            print(f'初始化评论爬取类,创建文件时发生错误:{e}')
+        finally:
+            self.filepath = full_file_path
 
     
 
@@ -31,12 +44,14 @@ class Video_Comment_Extractor:
         打开文件
         """
         self.fp = open(self.filepath,'w',encoding = 'utf-8')
+
     def write_comment(self,data):
         """
         写入一条文件
         """
         self.fp.write(json.dumps(data,ensure_ascii=False)+'\n')
         self.fp.flush()
+
     def close_writer(self):
         """
         关闭文件
@@ -45,9 +60,10 @@ class Video_Comment_Extractor:
             self.fp.close()
 
 
-
     def get_cookies(self):
-        cookie_path = os.path.join("..",'spider','core')
+        curr_folder_name = os.path.dirname(__file__)
+        cookie_path = os.path.join(curr_folder_name,'cookies','bilibili_cookie.json')
+        print('cookie_path:',cookie_path)
         self.headers = HEADERS.copy()
 
         if not os.path.exists(cookie_path):
@@ -222,13 +238,80 @@ class Video_Comment_Extractor:
             for r in replies:
                 sub_replies.append({
                     'comment': r['content']['message'],
-                    'likes':r['likes'],
+                    'like':r['like'],
                     'user':r['member']['uname'],
                     'level':r['member']['level_info']['current_level'],
                     'ip':self.extract_ip(r)
                     })
             pn += 1
         return sub_replies
+    
+    def crawl_all_comments(self,order = 'time'):
+        """
+        爬取所有评论并保存
+        order : 爬取评论时的顺序,默认按时间顺序
+        """
+        all_comments = []
+
+        total_count,total_pages = self.get_total_comments_and_pages(order)
+
+        for pn in range(1,total_pages+1):
+            print(f'正在获取第{pn}/{total_pages}页...')
+
+            time.sleep(random.uniform(0.3,0.5))# 每次爬取前随机停顿
+
+            params = {
+                'oid' : self.video_aid,
+                'type' : 1,
+                'pn' : pn,
+                'ps' : 20,
+                'order' : order                
+                }
+
+            resp = requests.get(
+                self.comment_api,
+                params = params,
+                headers = self.headers,
+                timeout = 10
+                ).json()
+            
+            replies = resp.get('data',{}).get('replies',{})
+            
+            if not replies:
+                continue
+            
+            # 边爬取边写如文件
+            self.open_writer()
+            
+            for reply in replies:
+                # 获取每一条评论信息
+                comment_data = {
+                    'comment' : reply['content']['message'],
+                    'like' : reply['like'],
+                    'reply_count' : reply['rcount'],
+                    'ctime' : reply['ctime'],
+                    'user':{
+                        'name' : reply['member']['uname'],
+                        'level' : reply['member']['level_info']['current_level'],
+                        'ip' : self.extract_ip(reply)
+                        },
+                        'replies' : [] # 子回复      
+                    }
+                # 如果有子回复,再抓
+                if reply['rcount'] > 0:
+                    comment_data['replies'] = self.get_sub_replies(reply['rpid'])
+                
+                # 写入文件
+                self.write_comment(comment_data)
+
+                # 保存到所有评论列表中
+                all_comments.append(comment_data)
+
+            # 关闭写文件器
+            self.close_writer()
+
+            return all_comments
+
 
             
 
@@ -237,4 +320,4 @@ class Video_Comment_Extractor:
 
 if __name__ == '__main__':
     comment_extract = Video_Comment_Extractor(TEST_LINK)
-    comment_extract.get_total_comments_and_pages()
+    comment_extract.crawl_all_comments()
