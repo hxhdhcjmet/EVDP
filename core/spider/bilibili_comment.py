@@ -13,52 +13,15 @@ HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/
         "Accept": "application/json, text/plain, */*",
     }
 
-TEST_LINK = r'https://www.bilibili.com/video/BV1ggrKBKEAD/?spm_id_from=333.1007.tianma.5-3-16.click&vd_source=903caa43b134dc6c594281212f0d6dee'
+TEST_LINK = r'https://www.bilibili.com/video/BV1JR62BYEL5/?spm_id_from=333.1007.tianma.5-1-14.click&vd_source=903caa43b134dc6c594281212f0d6dee'
 
 
 class Video_Comment_Extractor:
-    def __init__(self,link,filename = default_filename()):
+    def __init__(self,link):
         self.link = link
         self.view_api = r"https://api.bilibili.com/x/web-interface/view"
         self.comment_api = r"https://api.bilibili.com/x/v2/reply/main"
         self.reply_api = r'https://api.bilibili.com/x/v2/reply/reply'
-
-        file_path = get_data_path(filename = filename) # 这里创建的是文件夹,需要进一步创建一个同名文件
-        save_file_name = filename+'.json'
-        full_file_path = os.path.join(file_path,save_file_name)
-        try:
-            with open(full_file_path,'x',encoding = 'utf-8') as f:
-                pass
-            print(f'初始化成功,保存文件路径:{full_file_path},数据文件与文件夹同名,为:{save_file_name}')
-        except FileExistsError:
-            print('保存文件已存在,将不重复创建!')
-        except Exception as e:
-            print(f'初始化评论爬取类,创建文件时发生错误:{e}')
-        finally:
-            self.filepath = full_file_path
-
-    
-
-    def open_writer(self):
-        """
-        打开文件
-        """
-        self.fp = open(self.filepath,'w',encoding = 'utf-8')
-
-    def write_comment(self,data):
-        """
-        写入一条文件
-        """
-        self.fp.write(json.dumps(data,ensure_ascii=False)+'\n')
-        self.fp.flush()
-
-    def close_writer(self):
-        """
-        关闭文件
-        """
-        if hasattr(self,'fp'):
-            self.fp.close()
-
 
     def get_cookies(self):
         curr_folder_name = os.path.dirname(__file__)
@@ -95,7 +58,7 @@ class Video_Comment_Extractor:
                 headers = self.headers,
                 timeout = 10
                 ).json()
-            if resp.get('code' == 0) and resp.get('data',{}).get('isLogin'):
+            if resp.get('code') == 0 and resp.get('data',{}).get('isLogin'):
                 self.is_login = True
                 print(f"登陆成功:{resp['data']['uname']}")
             else:
@@ -246,12 +209,33 @@ class Video_Comment_Extractor:
             pn += 1
         return sub_replies
     
+    def build_comment_data(self,reply):
+        """
+        在爬取所有评论时组织爬取子回复结构
+        """
+        comment_data = {
+        'comment': reply['content']['message'],
+        'like': reply['like'],
+        'reply_count': reply['rcount'],
+        'ctime': reply['ctime'],
+        'user': {
+            'name': reply['member']['uname'],
+            'level': reply['member']['level_info']['current_level'],
+            'ip': self.extract_ip(reply)
+        },
+        'replies': []
+    }
+
+        if reply['rcount'] > 0:
+            comment_data['replies'] = self.get_sub_replies(reply['rpid'])
+
+        return comment_data
+    
     def crawl_all_comments(self,order = 'time'):
         """
         爬取所有评论并保存
         order : 爬取评论时的顺序,默认按时间顺序
         """
-        all_comments = []
 
         total_count,total_pages = self.get_total_comments_and_pages(order)
 
@@ -275,49 +259,52 @@ class Video_Comment_Extractor:
                 timeout = 10
                 ).json()
             
-            replies = resp.get('data',{}).get('replies',{})
+            replies = resp.get('data',{}).get('replies',[])
             
             if not replies:
                 continue
             
-            # 边爬取边写如文件
-            self.open_writer()
-            
             for reply in replies:
-                # 获取每一条评论信息
-                comment_data = {
-                    'comment' : reply['content']['message'],
-                    'like' : reply['like'],
-                    'reply_count' : reply['rcount'],
-                    'ctime' : reply['ctime'],
-                    'user':{
-                        'name' : reply['member']['uname'],
-                        'level' : reply['member']['level_info']['current_level'],
-                        'ip' : self.extract_ip(reply)
-                        },
-                        'replies' : [] # 子回复      
-                    }
-                # 如果有子回复,再抓
-                if reply['rcount'] > 0:
-                    comment_data['replies'] = self.get_sub_replies(reply['rpid'])
-                
-                # 写入文件
-                self.write_comment(comment_data)
-
-                # 保存到所有评论列表中
-                all_comments.append(comment_data)
-
-            # 关闭写文件器
-            self.close_writer()
-
-            return all_comments
+                # 获取每一条评论信息，yield产出
+                yield self.build_comment_data(reply)
 
 
+class CommentWriter:
+    def __init__(self,filename = default_filename()):
+
+        file_path = get_data_path(filename = filename) # 这里创建的是文件夹,需要进一步创建一个同名文件
+        save_file_name = filename+'.jsonl'
+        full_file_path = os.path.join(file_path,save_file_name)
+        try:
+            with open(full_file_path,'x',encoding = 'utf-8') as f:
+                pass
+            print(f'初始化成功,保存文件路径:{full_file_path},数据文件与文件夹同名,为:{save_file_name}')
+        except FileExistsError:
+            print('保存文件已存在,将不重复创建!')
+        except Exception as e:
+            print(f'初始化评论爬取类,创建文件时发生错误:{e}')
+        finally:
+            self.filepath = full_file_path
+            self.fp = open(self.filepath,'w',encoding = 'utf-8')
+
+    def write(self,data):
+        self.fp.write(json.dumps(data,ensure_ascii=False)+'\n')
+
+    def close(self):
+        self.fp.close()
+        
+
+        
             
 
 
 
 
 if __name__ == '__main__':
-    comment_extract = Video_Comment_Extractor(TEST_LINK)
-    comment_extract.crawl_all_comments()
+    extractor  = Video_Comment_Extractor(TEST_LINK)
+    writer = CommentWriter('2026115bilibili')
+
+    for comment in extractor.crawl_all_comments(order = 'time'):
+        writer.write(comment)
+    writer.close()
+    print('爬取完成！')
