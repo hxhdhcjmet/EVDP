@@ -13,17 +13,20 @@ import datetime
 import jieba
 import matplotlib.pyplot as plt
 import jieba.analyse
+import threading
 
 from collections import Counter
 from snownlp import SnowNLP
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "application/json, text/plain, */*",
     }
 
-TEST_LINK = r'https://www.bilibili.com/video/BV1ZUkuBfEF5/?spm_id_from=333.1007.tianma.1-1-1.click&vd_source=903caa43b134dc6c594281212f0d6dee'
+TEST_LINK = r'https://www.bilibili.com/video/BV1VmvUBEE9z/?spm_id_from=333.1391.0.0&vd_source=903caa43b134dc6c594281212f0d6dee'
 
 
 # 省份中英文/拼音转换字典
@@ -38,6 +41,38 @@ PROVINCE_MAP = {
     '广西': 'Guangxi', '西藏': 'Tibet', '宁夏': 'Ningxia', '新疆': 'Xinjiang',
     '中国香港': 'China Hong Kong', '中国澳门': 'China Macao', '未知': 'Unknown', '海外': 'Overseas'
 }
+
+class CrawlStats:
+    # 爬取统计信息类
+    def __init__(self, total_pages):
+        self.total_pages = total_pages
+        self.finished_pages = 0
+        self.failed_pages = 0
+        self.total_comments = 0
+        self.lock = threading.Lock()
+        self.start_time = time.time()
+
+    def page_done(self, comment_count):
+        with self.lock:
+            self.finished_pages += 1
+            self.total_comments += comment_count
+
+    def page_failed(self):
+        with self.lock:
+            self.failed_pages += 1
+
+    def report(self):
+        elapsed = time.time() - self.start_time
+        speed = self.total_comments / elapsed if elapsed > 0 else 0
+        print(
+            f'[进度] {self.finished_pages}/{self.total_pages} 页 | '
+            f'评论数: {self.total_comments} | '
+            f'失败页: {self.failed_pages} | '
+            f'用时: {elapsed:.1f}s | '
+            f'速度: {speed:.1f} 条/s'
+        )
+
+
 
 
 class Video_Comment_Extractor:
@@ -291,7 +326,89 @@ class Video_Comment_Extractor:
             for reply in replies:
                 # 获取每一条评论信息，yield产出
                 yield self.build_comment_data(reply)
+    
 
+
+
+
+
+    def fetch_one_page(self, pn, order='time'):
+        params = {
+            'oid': self.video_aid,
+            'type': 1,
+            'pn': pn,
+            'ps': 50,  # 增大单页数量
+            'order': order
+        }
+
+        try:
+            time.sleep(random.uniform(0.05, 0.2))
+            resp = self.session.get(
+                self.comment_api,
+                params=params,
+                headers=self.headers,
+                timeout=10
+            ).json()
+            return resp.get('data', {}).get('replies', [])
+        except Exception as e:
+            print(f'[错误] 第 {pn} 页请求失败: {e}')
+            return None
+
+    def crawl_all_comments_threadpool(
+    self,
+    writer,
+    order='time',
+    max_workers=8,
+    report_interval=5
+):
+        """
+        线程池并发爬取（无 generator，带进度统计）
+        """
+        total_count, total_pages = self.get_total_comments_and_pages(order)
+        if total_pages == 0:
+            print('无评论，结束')
+            return
+
+        self.session = requests.Session()
+        self.session.headers.update(self.headers)
+
+        stats = CrawlStats(total_pages)
+        last_report = time.time()
+
+        print(f'开始爬取：总页数={total_pages}，线程数={max_workers}')
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_map = {
+                executor.submit(self.fetch_one_page, pn, order): pn
+                for pn in range(1, total_pages + 1)
+            }
+
+            for future in as_completed(future_map):
+                pn = future_map[future]
+                try:
+                    replies = future.result()
+                    if replies is None:
+                        stats.page_failed()
+                        continue
+
+                    for reply in replies:
+                        data = self.build_comment_data(reply)
+                        writer.write(data)
+
+                    stats.page_done(len(replies))
+
+                except Exception as e:
+                    print(f'[异常] 第 {pn} 页处理失败: {e}')
+                    stats.page_failed()
+
+                # 定期输出进度
+                if time.time() - last_report > report_interval:
+                    stats.report()
+                    last_report = time.time()
+
+        stats.report()
+        self.session.close()
+        print('爬取完成')
 
 class CommentWriter:
     def __init__(self,filename = default_filename()):
@@ -301,6 +418,7 @@ class CommentWriter:
         full_file_path = os.path.join(file_path,save_file_name)
         self.filepath = full_file_path
         self.fp = None
+        self.lock = threading.Lock()
 
     def open_for_write(self):
         """
@@ -326,7 +444,8 @@ class CommentWriter:
     def write(self,data):
         if not self.fp:
             self.open_for_write()
-        self.fp.write(json.dumps(data,ensure_ascii=False)+'\n')
+        with self.lock:
+            self.fp.write(json.dumps(data,ensure_ascii=False)+'\n')
 
     def close(self):
         if self.fp:
@@ -479,7 +598,7 @@ class CommentAnalyser:
     
 
 
-    def plot_ip_distribubtion(self,deduplicate = True):
+    def plot_ip_distribution(self,deduplicate = True):
         """
         绘制IP分布图
         """
@@ -496,53 +615,73 @@ class CommentAnalyser:
         #  统计并映射为英文
         # 提取 Top 10
         counts = temp_df['user.ip'].value_counts().head(10)
+        # 统计其他IP
+        others = temp_df['user.ip'].value_counts().iloc[10:].sum()
+        ip_names = list(counts.index)
+        ip_values = list(counts.values)
+        if others > 0:
+            ip_names.append('Others')
+            ip_values.append(others)
         
         # 将索引（中文省份）转换为英文，如果字典里没有则保留原样
-        eng_indices = [PROVINCE_MAP[name] if name in PROVINCE_MAP else "Other" for name in counts.index]
+        eng_indices = [PROVINCE_MAP[name] if name in PROVINCE_MAP else "Others" for name in ip_names]
 
 
         
         #  绘图
-        plt.figure(figsize=(12, 7))
+        fig,(ax1,ax2) = plt.subplots(1,2,figsize = (18,7)) # 1行2列
+        title_type = 'Unique Users' if deduplicate else 'Total Comments'
+
+        # ==========子图1==========
         # 创建柱状图
-        bars = plt.bar(eng_indices, counts.values, color='steelblue', edgecolor='black', alpha=0.8)
-        
+        bars = ax1.bar(eng_indices, ip_values, color='steelblue', edgecolor='black', alpha=0.8)
         # 在柱子上方标注具体数字
         for bar in bars:
             yval = bar.get_height()
-            plt.text(bar.get_x() + bar.get_width()/2, yval + 0.2, 
+            ax1.text(bar.get_x() + bar.get_width()/2, yval + 0.2, 
                     int(yval), va='bottom', ha='center', fontsize=11)
 
         # 设置标题和标签
-        title_type = "Unique Users" if deduplicate else "Total Comments"
-        plt.title(f'Top 10 IP Distribution ({title_type})', fontsize=14)
-        plt.xlabel('Province / Region', fontsize=12)
-        plt.ylabel('Count', fontsize=12)
-        plt.xticks(rotation=45)
-        plt.grid(axis='y', linestyle='--', alpha=0.6)
+        ax1.set_title(f'Top 10 and Other IP Distribution ({title_type})', fontsize=14)
+        ax1.set_xlabel('Province / Region', fontsize=12)
+        ax1.set_ylabel('Count', fontsize=12)
+        ax1.tick_params(axis='x', rotation=45)
+        ax1.grid(axis='y', linestyle='--', alpha=0.6)
         
+        # ==========子图2==========
+        # 饼图
+        colors = plt.cm.Pastel1(range(len(ip_values)))
+        wedges,texts,autotexts = ax2.pie(ip_values,labels = eng_indices,autopct = '%1.1f%%',colors = colors,
+         startangle = 90,shadow = True)
+        plt.setp(autotexts, size=10, weight="bold", color="black")
+        plt.setp(texts, size=11)
+        ax2.set_title(f'Top 10 and Other IP Distribution - Pie Chart ({title_type})', fontsize=14)
+
         plt.tight_layout()
         plt.show() # 弹窗显示
 
 
 
-
-
 if __name__ == '__main__':
     extractor  = Video_Comment_Extractor(TEST_LINK)
-    writer = CommentWriter('2026115bilibili')
+    writer = CommentWriter('liuyeyidongbudong')
 
-    # for comment in extractor.crawl_all_comments(order = 'time'):
-    #      writer.write(comment)
+    # print('===== 开始并发爬取 =====')
+    # extractor.crawl_all_comments_threadpool(
+    #     writer=writer,
+    #     order='time',
+    #     max_workers=6,       # 建议 6~12
+    #     report_interval=3    # 每 3 秒打印一次进度
+    # )
     # writer.close()
-    # print('爬取完成！')
 
+    print('===== 爬取完成，开始分析 =====')
     print('开始分析数据...')
     analyzer = CommentAnalyser(writer.filepath)
     analyzer.load()
     analyzer.preprocess()
-    # analyzer.plot_time_density()
-    # analyzer.plot_user_level()
+    analyzer.plot_time_density()
+    analyzer.plot_user_level()
     analyzer.analyze_sentiment()
     analyzer.plot_sentiment()
-    analyzer.plot_ip_distribubtion(False)
+    analyzer.plot_ip_distribution(False) 
