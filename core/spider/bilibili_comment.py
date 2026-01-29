@@ -14,6 +14,8 @@ import jieba
 import matplotlib.pyplot as plt
 import jieba.analyse
 import threading
+import aiohttp
+import asyncio
 
 from collections import Counter
 from snownlp import SnowNLP
@@ -26,7 +28,7 @@ HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/
         "Accept": "application/json, text/plain, */*",
     }
 
-TEST_LINK = r'https://www.bilibili.com/video/BV1VmvUBEE9z/?spm_id_from=333.1391.0.0&vd_source=903caa43b134dc6c594281212f0d6dee'
+TEST_LINK = r'https://www.bilibili.com/video/BV119rfB1EEK/?spm_id_from=333.1007.tianma.4-1-11.click&vd_source=903caa43b134dc6c594281212f0d6dee'
 
 
 # 省份中英文/拼音转换字典
@@ -72,6 +74,39 @@ class CrawlStats:
             f'速度: {speed:.1f} 条/s'
         )
 
+
+
+
+
+class CrawlPointer:
+    """
+    爬取指针,下次爬取时从指针记录处开始爬取
+    """
+    def __init__(self,save_dir):
+        self.path = os.path.join(save_dir,'progress.json')
+        self.last_page = 0
+        self.total_comments = 0
+        self._load()
+
+    def _load(self):
+        if os.path.exists(self.path):
+            try:
+                with open(self.path,'r',encoding = 'utf-8') as f:
+                    data = json.load(f)
+                    self.last_page = data.get('last_page',0)
+                    self.total_comments = data.get('total_commints',0)
+            except Exception as e:
+                    print('加载爬取指针失败:',e)
+
+    def update(self,page,comments):
+        self.last_page = page
+        self.total_comments+= comments
+        with open(self.path,'w',encoding = 'utf-8') as f:
+            json.dump({
+            'last_page' : self.last_page,
+            'total_comments' : self.total_comments,
+            'update_time':datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            },f,ensure_ascii = False,indent = 2)
 
 
 
@@ -297,35 +332,103 @@ class Video_Comment_Extractor:
         """
 
         total_count,total_pages = self.get_total_comments_and_pages(order)
-
-        for pn in range(1,total_pages+1):
-            print(f'正在获取第{pn}/{total_pages}页...')
-
-            time.sleep(random.uniform(0.3,0.5))# 每次爬取前随机停顿
-
+        stats = CrawlStats(total_pages)
+        finished_pages = 0
+        next_offset = 0
+        mode = 3 if order == 'time' else 2
+        while True:
             params = {
-                'oid' : self.video_aid,
-                'type' : 1,
-                'pn' : pn,
-                'ps' : 20,
-                'order' : order                
+                'oid':self.video_aid,
+                'type': 1,
+                'mode':mode,
+                'next':next_offset,
+                'ps':20
                 }
+            try:
+                resp_json = requests.get(self.comment_api,params = params,headers = self.headers,timeout=10).json()
+                if resp_json.get('code') != 0:
+                    print('请求评论失败:',resp_json.get('message','未知错误'))
+                    break
+                
+                data = resp_json.get('data',{})
+                replies = data.get('replies',[])
 
-            resp = requests.get(
-                self.comment_api,
-                params = params,
-                headers = self.headers,
-                timeout = 10
-                ).json()
+                if not replies:
+                    # 没有更多评论了
+                    break
+                for reply in replies:
+                    yield self.build_comment_data(reply)
+
+                # 更新offset指向下一页
+                cursor = data.get('cursor',{})
+                next_offset = cursor.get('next')
+                is_end = cursor.get('is_end',False)
+
+                if is_end:
+                    # 爬取完毕
+                    print('爬取完毕!')
+                    break
+                stats.page_done(len(replies))
+                if finished_pages != stats.finished_pages:
+                    finished_pages = stats.finished_pages
+                    stats.report()
+
+                    # 爬取完随机停顿
+                    time.sleep(random.uniform(2,4))
+            except Exception as e:
+                stats.page_failed()
+                print(f'发生错误:{e}')
+                break
+
+                                                  
+
+
+
+
+
+
+        # for pn in range(1,total_pages+1):
+        #     print(f'正在获取第{pn}/{total_pages}页...')
+
+        #     time.sleep(random.uniform(3,5))# 每次爬取前随机停顿
+
+        #     params = {
+        #         'oid' : self.video_aid,
+        #         'type' : 1,
+        #         'pn' : pn,
+        #         'ps' : 20,
+        #         'order' : order                
+        #         }
+
+        #     resp = requests.get(
+        #         self.comment_api,
+        #         params = params,
+        #         headers = self.headers,
+        #         timeout = 10
+        #         ).json()
             
-            replies = resp.get('data',{}).get('replies',[])
+        #     replies = resp.get('data',{}).get('replies',[])
             
-            if not replies:
-                continue
+        #     if not replies:
+        #         continue
             
-            for reply in replies:
-                # 获取每一条评论信息，yield产出
-                yield self.build_comment_data(reply)
+        #     for reply in replies:
+        #         # 获取每一条评论信息，yield产出
+        #         try:
+        #             yield self.build_comment_data(reply)
+        #         except Exception as e:
+        #             stats.failed_pages()
+        #             print(f'爬取发生错误:{e}')
+        #             continue
+        #     stats.page_done(len(replies))
+        #     if finished_pages != stats.finished_pages:
+        #         finished_pages = stats.finished_pages
+        #         stats.report()
+            
+            
+
+
+
     
 
 
@@ -362,7 +465,7 @@ class Video_Comment_Extractor:
     report_interval=5
 ):
         """
-        线程池并发爬取（无 generator，带进度统计）
+        线程池并发爬取
         """
         total_count, total_pages = self.get_total_comments_and_pages(order)
         if total_pages == 0:
@@ -409,6 +512,179 @@ class Video_Comment_Extractor:
         stats.report()
         self.session.close()
         print('爬取完成')
+
+
+    # 新增异步爬取
+
+    # 单页
+    async def fetch_one_page_async(self,session,sem,pn,order):
+        params = {
+            'oid' : self.video_aid,
+            'type': 1,
+            'pn' : pn,
+            'ps' : 50,
+            'order' : order
+        }
+
+        async with sem:
+            try:
+                await asyncio.sleep(random.uniform(0.05,0.2))
+                async with session.get(self.comment_api,params = params, timeout = 15) as resp:
+                    data = await resp.json()
+                    return data.get('data',{}).get('replies',[])
+            except Exception as e:
+                print(f'[错误]第{pn}页请求失败:{e}')
+                return None
+            
+
+
+    async def crawl_all_comments_async(self,writer,order = 'time',max_concurrency = 5):
+        """
+        异步爬取,基于cursor逻辑
+        """
+        total_count,total_pages = self.get_total_comments_and_pages(order)
+        mode = 2 if order == 'time' else 3
+        next_offset = 0
+        is_end = False
+
+        if total_pages == 0:
+            print('无评论，结束')
+            return
+        async with aiohttp.ClientSession(headers = self.headers) as session:
+            stas = AsyncCrawStats(0,total_pages)
+            finished_pages = 0
+            while not is_end:
+                params = {
+                    'oid':self.video_aid,
+                    'type':1,
+                    'mode':mode,
+                    'next':next_offset,
+                    'ps':20 
+                    }
+                try:
+                    # 随机延迟
+                    await asyncio.sleep(random.uniform(1.5,2.5))
+
+                    async with session.get(self.comment_api,params = params,timeout = 15) as resp:
+                        res_data = await resp.json()
+                        if res_data.get('code') != 0:
+                            print(f'解析结束或被拦截:{res_data.get('message','未知错误')}')
+                            break
+                        
+                        data = res_data.get('data',{})
+                        replies = data.get('replies',[])
+
+                        if not replies:
+                            print('无更多评论,爬取结束!')
+                            break
+                        
+                        for reply in replies:
+                            comment_item = self.build_comment_data(reply)
+                            writer.write(comment_item)
+
+                        # 更新指针
+                        cursor = data.get('cursor',{})
+                        next_offset = cursor.get('next')
+                        is_end = cursor.get('is_end',False)
+
+                        stas.page_done(len(replies))
+                        if finished_pages != stas.finished_pages:
+                            finished_pages = stas.finished_pages
+                            stas.report()
+                except Exception as e:
+                    print(f'异步请求发生错误:{e}')
+                    break
+            print('异步爬取完成!')
+
+                         
+
+
+
+
+
+
+    # async def crawl_all_comments_async(self,writer,order = 'time',max_concurrency = 5):
+    #     """
+    #     异步爬取主函数
+    #     """
+    #     total_count,total_pages = self.get_total_comments_and_pages(order)
+
+
+    #     if total_pages == 0:
+    #         print('无评论,结束')
+    #         return
+        
+
+    #     # =====断点续爬=====
+        
+    #     save_dir = os.path.dirname(writer.filepath)
+    #     pointer = CrawlPointer(save_dir)
+    #     start_page = pointer.last_page + 1
+
+    #     if start_page > total_pages:
+    #         print('评论已全部爬取完成!')
+    #         return 
+        
+    #     print(f'从第{start_page} 页开始爬取 (总页数{total_pages})')
+    #     stats = AsyncCrawStats(start_page - 1,total_pages)
+    #     sem = asyncio.Semaphore(max_concurrency)
+    #     connector = aiohttp.TCPConnector(limit_per_host = max_concurrency)
+    #     async with aiohttp.ClientSession(headers = self.headers,connector = connector) as session:
+    #         tasks = [self.fetch_one_page_async(session,sem,pn,order) for pn in range(start_page,total_pages + 1)]
+    #         for pn,coro in zip(range(start_page,total_pages + 1),asyncio.as_completed(tasks)):
+    #             replies = await coro
+
+    #             # 失败页
+    #             if replies is None:
+    #                 stats.page_failed()
+    #                 continue
+
+    #             for reply in replies:
+    #                 data = self.build_comment_data(reply)
+    #                 writer.write(data)
+
+    #             stats.page_done(len(replies))
+    #             pointer.update(pn,len(replies))
+
+    #             if stats.finished_pages % 3 == 0:
+    #                 stats.report()
+    #     stats.report()
+    #     print('异步爬取完成!')
+
+
+
+class AsyncCrawStats:
+    """
+    异步爬取统计器
+    """
+    def __init__(self,start_page,total_pages):
+        self.start_page = start_page
+        self.total_pages = total_pages
+        self.finished_pages = 0
+        self.failed_pages = 0
+        self.total_comments = 0
+        self.start_time = time.time()
+
+
+    def page_done(self,count):
+        self.finished_pages += 1
+        self.total_comments += count
+
+    def page_failed(self):
+        self.failed_pages += 1
+
+    def report(self):
+        elapsed = time.time() - self.start_time
+        speed = self.total_comments / elapsed if elapsed > 0 else 0
+        print(
+            f'[进度]页{self.start_page + self.finished_pages}/{self.total_pages} | '
+            f'评论{self.total_comments}  | '
+            f'失败页{self.failed_pages} | '
+            f'{elapsed:.1f}s | {speed:.1f}条/s'
+        )
+
+
+
 
 class CommentWriter:
     def __init__(self,filename = default_filename()):
@@ -664,16 +940,28 @@ class CommentAnalyser:
 
 if __name__ == '__main__':
     extractor  = Video_Comment_Extractor(TEST_LINK)
-    writer = CommentWriter('liuyeyidongbudong')
+    writer = CommentWriter('bilibili_comments-test')
+
+    print('====== 开始异步爬取 ======')
+    asyncio.run(
+        extractor.crawl_all_comments_async(
+            writer = writer,
+            order = 'time',
+            max_concurrency = 10
+            )
+        )
+    writer.close()
 
     # print('===== 开始并发爬取 =====')
     # extractor.crawl_all_comments_threadpool(
     #     writer=writer,
     #     order='time',
-    #     max_workers=6,       # 建议 6~12
+    #     max_workers=10,       # 建议 6~12
     #     report_interval=3    # 每 3 秒打印一次进度
     # )
     # writer.close()
+
+
 
     print('===== 爬取完成，开始分析 =====')
     print('开始分析数据...')
