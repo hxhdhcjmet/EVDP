@@ -12,6 +12,7 @@ import pandas as pd
 import datetime
 import jieba
 import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
 import jieba.analyse
 import threading
 import aiohttp
@@ -23,12 +24,40 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from wordcloud import WordCloud
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "application/json, text/plain, */*",
     }
 
-TEST_LINK = r'https://www.bilibili.com/video/BV119rfB1EEK/?spm_id_from=333.1007.tianma.4-1-11.click&vd_source=903caa43b134dc6c594281212f0d6dee'
+TEST_LINK = r'https://www.bilibili.com/video/BV1zkkEBRER5/?spm_id_from=333.1007.tianma.2-1-3.click&vd_source=903caa43b134dc6c594281212f0d6dee'
+
+# 配置中文字体
+def init_font():
+    """
+    配置中文字体
+    """
+    # 目标字体目录
+    curr_file_path = os.path.abspath(__file__)
+    curr_dir = os.path.dirname(curr_file_path)
+
+    parent1 = os.path.dirname(curr_dir)
+    parent2 = os.path.dirname(parent1)
+    font_path = os.path.join(parent2,'assets/fonts/simhei.ttf')
+
+    if os.path.exists(font_path):
+        # 注册字体到字体管理器
+        fm.fontManager.addfont(font_path)
+        prop = fm.FontProperties(fname=font_path)
+        
+        # 设置全局默认字体为该文件的名称
+        plt.rcParams['font.sans-serif'] = [prop.get_name()]
+        plt.rcParams['font.family'] = 'sans-serif'
+        plt.rcParams['axes.unicode_minus'] = False
+        print(f'字体加载成功: {prop.get_name()}')
+    else:
+        # 如果没找到，尝试使用系统黑体垫底
+        print('警告: 未找到字体文件')
 
 
 # 省份中英文/拼音转换字典
@@ -733,11 +762,11 @@ class CommentWriter:
 class CommentAnalyser:
 
     def __init__(self,jsonl_path:str):
+        init_font()
         self.jsonl_path = jsonl_path
         self.df = None
         self.clustered_df = None
-        # 设置中文字体（防止Streamlit或Linux下乱码，根据系统环境调整）
-        plt.rcParams['axes.unicode_minus'] = False
+        self.stopwords = set(['的','了','是','我','你','他','吧','啊','呢','这','那','就'])
     
     def load(self):
         """
@@ -783,13 +812,50 @@ class CommentAnalyser:
 
     def get_keywords(self,top_n = 10):
         """
-        关键词分析:提取前n个关键词
+        提取关键此并生成词云
         """
         all_text = "".join(self.df['comment'].astype(str).tolist())
 
         # 使用TF-IDF算法提取关键词
-        keywords = jieba.analyse.extract_tags(all_text,took = top_n,withWeight = True)
+        keywords = jieba.analyse.extract_tags(all_text,topK = top_n,withWeight = True)
+        # 打印词云
+        
+        print("\n --- Top 关键词 ---")
+        for word,weight in keywords:
+            print(f"{word}: {weight:.4f}")
         return keywords
+    
+    def plot_wordcloud(self):
+        """
+        生成词云图
+        """
+        try:
+            curr_file_path = os.path.abspath(__file__)
+            curr_dir = os.path.dirname(curr_file_path)
+            parent1 = os.path.dirname(curr_dir)
+            parent2 = os.path.dirname(parent1)
+            font_path = os.path.join(parent2,'assets/fonts/simhei.ttf')
+        except Exception as e:
+            print('词云图配置中文字体失败:{e}')
+            font_path = ''
+
+        print('正在生成词云图...')
+        segmented_comments = self.df['comment'].apply(lambda x : " ".join([w for w in jieba.cut(str(x)) if len(w) >1]))
+        all_text = " ".join(segmented_comments)
+        wc = WordCloud(
+        font_path = font_path,
+        background_color = 'white',
+        width = 1000,
+        height = 600,
+        max_words = 100, 
+        stopwords = self.stopwords  
+        ).generate(all_text)
+
+        plt.figure(figsize = (12,8))
+        plt.imshow(wc,interpolation='bilinear')
+        plt.axis('off')
+        plt.title('BiliBili 评论词云图',fontsize = 16)
+        plt.show()
 
 
 
@@ -939,8 +1005,11 @@ class CommentAnalyser:
 
 
 if __name__ == '__main__':
+
+
+    init_font()
     extractor  = Video_Comment_Extractor(TEST_LINK)
-    writer = CommentWriter('bilibili_comments-test')
+    writer = CommentWriter('202625leige')
 
     print('====== 开始异步爬取 ======')
     asyncio.run(
@@ -968,6 +1037,8 @@ if __name__ == '__main__':
     analyzer = CommentAnalyser(writer.filepath)
     analyzer.load()
     analyzer.preprocess()
+    analyzer.get_keywords()
+    analyzer.plot_wordcloud()
     analyzer.plot_time_density()
     analyzer.plot_user_level()
     analyzer.analyze_sentiment()
