@@ -7,7 +7,7 @@ import json
 from math import ceil
 import os
 import random
-from utils import get_data_path,default_filename
+from .utils import get_data_path,default_filename
 import pandas as pd
 import datetime
 import jieba
@@ -18,6 +18,7 @@ import threading
 import aiohttp
 import asyncio
 
+from tqdm import tqdm
 from collections import Counter
 from snownlp import SnowNLP
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -30,7 +31,7 @@ HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/
         "Accept": "application/json, text/plain, */*",
     }
 
-TEST_LINK = r'https://www.bilibili.com/video/BV1zkkEBRER5/?spm_id_from=333.1007.tianma.2-1-3.click&vd_source=903caa43b134dc6c594281212f0d6dee'
+TEST_LINK = r'https://www.bilibili.com/video/BV1hn6KBeEKt/?spm_id_from=333.1007.tianma.4-3-13.click&vd_source=903caa43b134dc6c594281212f0d6dee'
 
 # 配置中文字体
 def init_font():
@@ -168,12 +169,22 @@ class Video_Comment_Extractor:
             self.is_login = False
     
 
+    def save_cookie_to_file(self,cookie_str):
+        """
+        保存Cookie到本地Json
+        """
+        cookie_dir = os.path.join(os.path.dirname(__file__),'cookies')
+        os.makedirs(cookie_dir,exist_ok=True)
+        path = os.path.join(cookie_dir,'bilibili_cookie.json')
+        with open(path,'w',encoding = 'utf-8') as f:
+            json.dump({"cookie": cookie_str,"time" : str(datetime.datetime.now())},f)
+
     def check_login_status(self):
         """
         检测当前是否为登录态
         """
         test_api = r'https://api.bilibili.com/x/web-interface/nav'
-        print('检测登陆状态中...')
+        # print('检测登陆状态中...')
         time.sleep(random.uniform(0.1,0.5))
         try:
             resp = requests.get(
@@ -182,14 +193,17 @@ class Video_Comment_Extractor:
                 timeout = 10
                 ).json()
             if resp.get('code') == 0 and resp.get('data',{}).get('isLogin'):
+                self.uname = resp['data']['uname']
                 self.is_login = True
-                print(f"登陆成功:{resp['data']['uname']}")
-            else:
-                self.is_login = False
-                print('当前为未登陆状态,将不保存IP属地信息')
+                return True
+                # print(f"登陆成功:{resp['data']['uname']}")
+            # else:
+            #     self.is_login = False
+            #     print('当前为未登陆状态,将不保存IP属地信息')
         except Exception as e:
             self.is_login = False
-            print('登陆状态检测失败,按未登陆处理')
+            return False
+            # print('登陆状态检测失败,按未登陆处理')
     
 
 
@@ -197,13 +211,14 @@ class Video_Comment_Extractor:
         """
         根据链接提取bv号
         """
-        print('获取视频bv号中...')
+        # print('获取视频bv号中...')
         bv_pattern = r'BV([a-zA-Z0-9]+)'
         bv_match = re.search(bv_pattern,self.link)
         if not bv_match:
             raise ValueError(f'无效的B站视频链接{self.link},无法提取BV号')
         self.bv_id = bv_match.group(0)
-        print('获取成功!')
+        return self.bv_id
+        # print('获取成功!')
 
 
     def get_video_aid(self,bv_id):
@@ -462,8 +477,6 @@ class Video_Comment_Extractor:
 
 
 
-
-
     def fetch_one_page(self, pn, order='time'):
         params = {
             'oid': self.video_aid,
@@ -567,150 +580,112 @@ class Video_Comment_Extractor:
             
 
 
-    async def crawl_all_comments_async(self,writer,order = 'time',max_concurrency = 5):
+    async def crawl_all_comments_async(self, writer, order='time',callback = None):
         """
-        异步爬取,基于cursor逻辑
+        异步爬取，修复进度统计逻辑
         """
-        total_count,total_pages = self.get_total_comments_and_pages(order)
+        # 1. 先获取一次元数据（总数）
+        total_count, _ = self.get_total_comments_and_pages(order)
+        if total_count == 0:
+            print('无评论，结束')
+            return
+
+        # 2. 初始化统计器 (使用 tqdm)
+        ps = 20
+        stats = AsyncCrawStats(total_count, ps=ps)
+        
         mode = 2 if order == 'time' else 3
         next_offset = 0
         is_end = False
 
-        if total_pages == 0:
-            print('无评论，结束')
-            return
-        async with aiohttp.ClientSession(headers = self.headers) as session:
-            stas = AsyncCrawStats(0,total_pages)
-            finished_pages = 0
+        async with aiohttp.ClientSession(headers=self.headers) as session:
             while not is_end:
                 params = {
-                    'oid':self.video_aid,
-                    'type':1,
-                    'mode':mode,
-                    'next':next_offset,
-                    'ps':20 
-                    }
+                    'oid': self.video_aid,
+                    'type': 1,
+                    'mode': mode,
+                    'next': next_offset,
+                    'ps': ps
+                }
                 try:
-                    # 随机延迟
-                    await asyncio.sleep(random.uniform(1.5,2.5))
+                    # 随机延迟，保护 IP
+                    await asyncio.sleep(random.uniform(1.0, 2.0))
 
-                    async with session.get(self.comment_api,params = params,timeout = 15) as resp:
+                    async with session.get(self.comment_api, params=params, timeout=15) as resp:
                         res_data = await resp.json()
+                        
                         if res_data.get('code') != 0:
-                            print(f'解析结束或被拦截:{res_data.get('message','未知错误')}')
+                            # 触发验证码或频率限制
+                            stats.pbar.set_description(f"中断: {res_data.get('message')}")
                             break
                         
-                        data = res_data.get('data',{})
-                        replies = data.get('replies',[])
+                        data = res_data.get('data', {})
+                        replies = data.get('replies', [])
 
+                        # 情况 A：返回空列表，说明到底了
                         if not replies:
-                            print('无更多评论,爬取结束!')
                             break
                         
+                        # 写入数据
                         for reply in replies:
                             comment_item = self.build_comment_data(reply)
                             writer.write(comment_item)
 
                         # 更新指针
-                        cursor = data.get('cursor',{})
+                        cursor = data.get('cursor', {})
                         next_offset = cursor.get('next')
-                        is_end = cursor.get('is_end',False)
+                        is_end = cursor.get('is_end', False)
 
-                        stas.page_done(len(replies))
-                        if finished_pages != stas.finished_pages:
-                            finished_pages = stas.finished_pages
-                            stas.report()
+                        # 更新 tqdm 进度
+                        stats.update(len(replies))
+
+                        if callback:
+                            # 计算百分比传给streamlit
+                            percent = min(stats.current_step / stats.total_steps,1.0)
+                            callback(percent,f"已爬取{stats.current_comment}条评论...")
+
+                        if is_end:
+                            stats.force_finish() # 强制拉满进度条
+                            break
+
                 except Exception as e:
-                    print(f'异步请求发生错误:{e}')
+                    stats.pbar.set_description(f"异常: {str(e)[:20]}")
                     break
-            print('异步爬取完成!')
+                    
+        stats.close()
+        print('\n[完成] 数据已保存至:', writer.filepath)
 
                          
-
-
-
-
-
-
-    # async def crawl_all_comments_async(self,writer,order = 'time',max_concurrency = 5):
-    #     """
-    #     异步爬取主函数
-    #     """
-    #     total_count,total_pages = self.get_total_comments_and_pages(order)
-
-
-    #     if total_pages == 0:
-    #         print('无评论,结束')
-    #         return
-        
-
-    #     # =====断点续爬=====
-        
-    #     save_dir = os.path.dirname(writer.filepath)
-    #     pointer = CrawlPointer(save_dir)
-    #     start_page = pointer.last_page + 1
-
-    #     if start_page > total_pages:
-    #         print('评论已全部爬取完成!')
-    #         return 
-        
-    #     print(f'从第{start_page} 页开始爬取 (总页数{total_pages})')
-    #     stats = AsyncCrawStats(start_page - 1,total_pages)
-    #     sem = asyncio.Semaphore(max_concurrency)
-    #     connector = aiohttp.TCPConnector(limit_per_host = max_concurrency)
-    #     async with aiohttp.ClientSession(headers = self.headers,connector = connector) as session:
-    #         tasks = [self.fetch_one_page_async(session,sem,pn,order) for pn in range(start_page,total_pages + 1)]
-    #         for pn,coro in zip(range(start_page,total_pages + 1),asyncio.as_completed(tasks)):
-    #             replies = await coro
-
-    #             # 失败页
-    #             if replies is None:
-    #                 stats.page_failed()
-    #                 continue
-
-    #             for reply in replies:
-    #                 data = self.build_comment_data(reply)
-    #                 writer.write(data)
-
-    #             stats.page_done(len(replies))
-    #             pointer.update(pn,len(replies))
-
-    #             if stats.finished_pages % 3 == 0:
-    #                 stats.report()
-    #     stats.report()
-    #     print('异步爬取完成!')
-
-
 
 class AsyncCrawStats:
     """
     异步爬取统计器
     """
-    def __init__(self,start_page,total_pages):
-        self.start_page = start_page
-        self.total_pages = total_pages
-        self.finished_pages = 0
-        self.failed_pages = 0
-        self.total_comments = 0
-        self.start_time = time.time()
+    def __init__(self,total_count,ps = 20):
+        self.total_comments = total_count
+        # 预计总页数作为tqdm的total
+        self.total_steps = ceil(total_count / ps) if total_count > 0 else 1
+        self.current_step = 0
+        self.pbar = tqdm(total = self.total_steps,desc = "爬取进度",unit = "页")
+        self.current_comments = 0
 
+    def update(self,inc_comments):
+        self.current_comments += inc_comments
+        self.current_step += 1
+        self.pbar.update(1)
+        self.pbar.set_postfix({"已爬取条数":self.current_comments})
 
-    def page_done(self,count):
-        self.finished_pages += 1
-        self.total_comments += count
+    def force_finish(self):
+        # 接口显示返回时,强制推满进度条
+        remaining = self.total_steps - self.current_step
+        if remaining > 0:
+            self.pbar.update(remaining)
+        self.pbar.set_description("爬取完成(已过滤隐藏评论)")
+        self.pbar.close()
 
-    def page_failed(self):
-        self.failed_pages += 1
+    def close(self):
+        self.pbar.close()
 
-    def report(self):
-        elapsed = time.time() - self.start_time
-        speed = self.total_comments / elapsed if elapsed > 0 else 0
-        print(
-            f'[进度]页{self.start_page + self.finished_pages}/{self.total_pages} | '
-            f'评论{self.total_comments}  | '
-            f'失败页{self.failed_pages} | '
-            f'{elapsed:.1f}s | {speed:.1f}条/s'
-        )
 
 
 
@@ -825,182 +800,163 @@ class CommentAnalyser:
             print(f"{word}: {weight:.4f}")
         return keywords
     
-    def plot_wordcloud(self):
+    def plot_wordcloud(self, return_fig=False):
+            """生成词云图"""
+            try:
+                curr_dir = os.path.dirname(os.path.abspath(__file__))
+                # 简化路径逻辑：向上退两级到根目录
+                root_dir = os.path.abspath(os.path.join(curr_dir, "../.."))
+                font_path = os.path.join(root_dir, 'assets/fonts/simhei.ttf')
+                if not os.path.exists(font_path): font_path = None
+            except:
+                font_path = None
+
+            print('正在生成词云图...')
+            segmented_comments = self.df['comment'].apply(lambda x: " ".join([w for w in jieba.cut(str(x)) if len(w) > 1]))
+            all_text = " ".join(segmented_comments)
+            
+            wc = WordCloud(
+                font_path=font_path,
+                background_color='white',
+                width=1000, height=600,
+                max_words=100, 
+                stopwords=self.stopwords  
+            ).generate(all_text)
+
+            fig, ax = plt.subplots(figsize=(12, 8))
+            ax.imshow(wc, interpolation='bilinear')
+            ax.axis('off')
+            # --- 修正点：使用 set_title ---
+            ax.set_title('BiliBili 评论词云图', fontsize=16) 
+            
+            if return_fig:
+                return fig
+            plt.show()
+            plt.close(fig)
+
+    def plot_time_density(self, freq='1h', return_fig=False):
         """
-        生成词云图
+        时间密度分析 - 增强版（解决 DatetimeIndex 报错）
         """
+        # 1. 基础检查：确保 df 存在且不为空
+        if self.df is None or self.df.empty:
+            print("警告：数据为空，无法生成时间密度图")
+            return None
+
+        # 2. 核心修复：确保 ctime 是 datetime 格式
+        # 即使 preprocess 跑过了，这里再检查一遍更稳健
         try:
-            curr_file_path = os.path.abspath(__file__)
-            curr_dir = os.path.dirname(curr_file_path)
-            parent1 = os.path.dirname(curr_dir)
-            parent2 = os.path.dirname(parent1)
-            font_path = os.path.join(parent2,'assets/fonts/simhei.ttf')
+            if not pd.api.types.is_datetime64_any_dtype(self.df['ctime']):
+                # 如果是整数时间戳，转换为 datetime
+                self.df['ctime'] = pd.to_datetime(self.df['ctime'], unit='s', errors='coerce')
+            
+            # 剔除转换失败的行（如果有的话）
+            temp_df = self.df.dropna(subset=['ctime']).copy()
+            
+            if temp_df.empty:
+                print("警告：没有有效的时间数据")
+                return None
+
+            # 3. 核心修复：显式将 ctime 设为索引并排序
+            temp_df = temp_df.set_index('ctime').sort_index()
+
         except Exception as e:
-            print('词云图配置中文字体失败:{e}')
-            font_path = ''
+            print(f"处理时间序列索引时发生错误: {e}")
+            return None
 
-        print('正在生成词云图...')
-        segmented_comments = self.df['comment'].apply(lambda x : " ".join([w for w in jieba.cut(str(x)) if len(w) >1]))
-        all_text = " ".join(segmented_comments)
-        wc = WordCloud(
-        font_path = font_path,
-        background_color = 'white',
-        width = 1000,
-        height = 600,
-        max_words = 100, 
-        stopwords = self.stopwords  
-        ).generate(all_text)
+        # 4. 执行重采样
+        try:
+            # size() 统计每个频率区间内的评论数量
+            ts = temp_df.resample(freq).size()
+            
+            # 如果重采样后数据太少（比如只有1个点），plot 会报错或很难看
+            if len(ts) < 1:
+                return None
 
-        plt.figure(figsize = (12,8))
-        plt.imshow(wc,interpolation='bilinear')
-        plt.axis('off')
-        plt.title('BiliBili 评论词云图',fontsize = 16)
-        plt.show()
+            # 5. 绘图
+            # 注意：这里要用 plt.subplots() 确保 fig 和 ax 的正确对应
+            fig, ax = plt.subplots(figsize=(12, 6))
+            
+            # ts 是 Series，可以直接调用 plot
+            ts.plot(ax=ax, color='#1f77b4', marker='.', markersize=4, linewidth=1)
+            
+            ax.set_title("Comments Time Density Distribution", fontsize=14, pad=20)
+            ax.set_xlabel('Time (Interval: {})'.format(freq), fontsize=12)
+            ax.set_ylabel('Comment Count', fontsize=12)
+            
+            # 优化视觉效果
+            ax.grid(True, linestyle='--', alpha=0.6)
+            plt.xticks(rotation=45)
+            fig.tight_layout()
 
+            if return_fig:
+                return fig
+            plt.show()
+            plt.close(fig)
+            
+        except Exception as e:
+            # 这里捕获的就是你遇到的 "Only valid with DatetimeIndex" 错误
+            print(f"重采样分析失败: {e}")
+            return None
 
-
-    def analyze_sentiment(self):
-        """
-        情感分析
-        """
-        print('正在进行情感分析...')
-        if self.df is None or 'comment' not in self.df.columns:
-            return self
-
-        # 计算得分
-        self.df['sentiment_score'] = self.df['comment'].apply(
-            lambda x: SnowNLP(str(x)).sentiments if pd.notnull(x) else 0.5
-        )
-
-        # 分类贴标签
-        def classify(score):
-            if score>0.6: return 'positive'
-            elif score < 0.4: return 'negative'
-            else: return 'neutral'
-        
-        self.df['sentiment_type'] = self.df['sentiment_score'].apply(classify)
-        print('情感分析完成!')
-        return self
-    
-    def plot_sentiment(self):
-        """情感分布饼图"""
-        counts = self.df['sentiment_type'].value_counts()
-        plt.figure(figsize=(8, 6))
-        plt.pie(counts, labels=counts.index, autopct='%1.1f%%', colors=['#66b3ff','#99ff99','#ff9999'])
-        plt.title('Comment Sentiment Distribution')
-        plt.show()
-
-        
-        
-
-
-    def cluster_comments(self,k:int = 5):
-        """
-        聚类分析
-        """
-        df = self.df
-        
-        def cut(text):
-            return ' '.join(jieba.cut(text))
-        
-        corpus = df['comment'].map(cut).tolist()
-
-        vectorizer = TfidfVectorizer(max_features=3000)
-        X = vectorizer.fit_transform(corpus)
-
-        model = KMeans(n_clusters = k,random_state=42)
-        df['cluster'] = model.fit_predict(X)
-
-        self.cluster_df = df 
-        return self
-    
-    def plot_time_density(self,freq = '1h'):
-        ts = self.df.set_index('ctime').resample(freq).size()
-
-        plt.figure(figsize = (10,5))
-        ts.plot()
-        plt.title("Comments Time Density")
-        plt.xlabel('time')
-        plt.ylabel('comment nums')
-        plt.tight_layout()
-        plt.show()
-    
-    def plot_user_level(self):
-        """
-        等级分析
-        """
+    def plot_user_level(self, return_fig=False):
+        """等级分析"""
         counts = self.df['user.level'].value_counts().sort_index()
 
-        plt.figure(figsize = (8,6))
-        plt.pie(counts,labels = [f"Lv{i}" for i in counts.index],autopct='%1.1f%%')
-        plt.title('User Level Distribution')
-        plt.tight_layout()
+        fig, ax = plt.subplots(figsize=(8, 6))
+        # 修正点：增加 label 对应
+        ax.pie(counts, labels=[f"Lv{i}" for i in counts.index], autopct='%1.1f%%', startangle=140)
+        ax.set_title('User Level Distribution')
+        
+        if return_fig:
+            return fig
         plt.show()
+        plt.close(fig)
 
-    
+    def plot_ip_distribution(self, deduplicate=True, return_fig=False):
+        """绘制IP分布图"""
+        if 'user.ip' not in self.df.columns or self.df['user.ip'].empty:
+            print("无IP数据或数据为空")
+            return None
 
-
-    def plot_ip_distribution(self,deduplicate = True):
-        """
-        绘制IP分布图
-        """
-        if 'user.ip' not in self.df.columns:
-            print("无IP数据")
-            return
-
-        #  数据处理
         temp_df = self.df.copy()
         if deduplicate:
-            # 假设以用户名作为唯一标识，保留该用户最后一次评论的记录
             temp_df = temp_df.drop_duplicates(subset=['user.name'], keep='last')
 
-        #  统计并映射为英文
-        # 提取 Top 10
-        counts = temp_df['user.ip'].value_counts().head(10)
-        # 统计其他IP
-        others = temp_df['user.ip'].value_counts().iloc[10:].sum()
+        counts_all = temp_df['user.ip'].value_counts()
+        counts = counts_all.head(10)
+        others = counts_all.iloc[10:].sum()
+        
         ip_names = list(counts.index)
         ip_values = list(counts.values)
         if others > 0:
             ip_names.append('Others')
             ip_values.append(others)
         
-        # 将索引（中文省份）转换为英文，如果字典里没有则保留原样
-        eng_indices = [PROVINCE_MAP[name] if name in PROVINCE_MAP else "Others" for name in ip_names]
+        # 假设 PROVINCE_MAP 已在外部定义
+        eng_indices = [PROVINCE_MAP.get(name, "Others") for name in ip_names]
 
-
-        
-        #  绘图
-        fig,(ax1,ax2) = plt.subplots(1,2,figsize = (18,7)) # 1行2列
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(18, 7))
         title_type = 'Unique Users' if deduplicate else 'Total Comments'
 
-        # ==========子图1==========
-        # 创建柱状图
+        # 子图1：柱状图
         bars = ax1.bar(eng_indices, ip_values, color='steelblue', edgecolor='black', alpha=0.8)
-        # 在柱子上方标注具体数字
         for bar in bars:
             yval = bar.get_height()
-            ax1.text(bar.get_x() + bar.get_width()/2, yval + 0.2, 
-                    int(yval), va='bottom', ha='center', fontsize=11)
+            ax1.text(bar.get_x() + bar.get_width()/2, yval + 0.1, int(yval), va='bottom', ha='center')
 
-        # 设置标题和标签
-        ax1.set_title(f'Top 10 and Other IP Distribution ({title_type})', fontsize=14)
-        ax1.set_xlabel('Province / Region', fontsize=12)
-        ax1.set_ylabel('Count', fontsize=12)
+        ax1.set_title(f'Top 10 IP Distribution ({title_type})', fontsize=14)
         ax1.tick_params(axis='x', rotation=45)
-        ax1.grid(axis='y', linestyle='--', alpha=0.6)
-        
-        # ==========子图2==========
-        # 饼图
-        colors = plt.cm.Pastel1(range(len(ip_values)))
-        wedges,texts,autotexts = ax2.pie(ip_values,labels = eng_indices,autopct = '%1.1f%%',colors = colors,
-         startangle = 90,shadow = True)
-        plt.setp(autotexts, size=10, weight="bold", color="black")
-        plt.setp(texts, size=11)
-        ax2.set_title(f'Top 10 and Other IP Distribution - Pie Chart ({title_type})', fontsize=14)
 
-        plt.tight_layout()
-        plt.show() # 弹窗显示
+        # 子图2：饼图
+        ax2.pie(ip_values, labels=eng_indices, autopct='%1.1f%%', startangle=90, shadow=False)
+        ax2.set_title(f'IP Percentage ({title_type})', fontsize=14)
+
+        fig.tight_layout()
+        if return_fig:
+            return fig
+        plt.show()
+        plt.close(fig)
 
 
 
@@ -1009,7 +965,7 @@ if __name__ == '__main__':
 
     init_font()
     extractor  = Video_Comment_Extractor(TEST_LINK)
-    writer = CommentWriter('202625leige')
+    writer = CommentWriter('liuye')
 
     print('====== 开始异步爬取 ======')
     asyncio.run(
