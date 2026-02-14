@@ -1,7 +1,9 @@
 import streamlit as st
 import asyncio
 import os
-from core.spider.bilibili_comment import Video_Comment_Extractor,CommentAnalyser,CommentWriter
+from core.spider.bilibili.bilibili_comment import Video_Comment_Extractor
+from core.spider.bilibili.CommentWriter import CommentWriter
+from core.spider.bilibili.CommentAnalyser import CommentAnalyser
 
 
 def render_bilibili_page():
