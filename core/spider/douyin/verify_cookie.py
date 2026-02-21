@@ -41,6 +41,7 @@ def verify_cookie()->bool:
 
         # 创建garbage类
         garbage = Garbage(CURR_FILE_NAME)
+        garbage.clear_now()
 
         try:
             print("正在访问个人中心...")
@@ -61,7 +62,7 @@ def verify_cookie()->bool:
 
             garbage.save_screenshot(page,"login_succes")
             browser.close()
-            garbage.clear_now()
+            garbage.clear_garbage(1)
             
             return True
         
