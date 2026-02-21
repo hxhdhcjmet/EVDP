@@ -49,5 +49,3 @@ class Garbage:
         立即清除garbage所有文件
         """
         self.clear_garbage(0)
-     
-
