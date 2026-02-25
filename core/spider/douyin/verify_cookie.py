@@ -3,7 +3,7 @@
 import json
 import os
 from playwright.sync_api import sync_playwright
-from utils import Garbage
+from .utils import Garbage
 
 # 保存cookie的路径
 CURR_FILE = os.path.abspath(__file__)
@@ -45,7 +45,7 @@ def verify_cookie()->bool:
 
         try:
             print("正在访问个人中心...")
-            page.goto("https://www.douyin.com/user/self",timeout=15000)
+            page.goto("https://www.douyin.com/user/self",timeout=30000)
             page.wait_for_timeout(3000)
             # 等待用户名元素加载
             username_locator = page.locator('#user_detail_element > div > div.a3i9GVfe.nZryJ1oM._6lTeZcQP.y5Tqsaqg > div.IGPVd8vQ > div.HjcJQS1Z > h1 > span > span > span > span > span > span')
@@ -60,29 +60,28 @@ def verify_cookie()->bool:
             print(f"当前URL:{page.url}")
             print("="*45)
 
-            garbage.save_screenshot(page,"login_succes")
+            path = garbage.save_screenshot(page,"login_succes")
             browser.close()
             garbage.clear_garbage(1)
             
-            return True
+            return True,username,path
         
         except TimeoutError:
             print("Cookie无效")
             print(f"当前URL:{page.url}")
             
-            garbage.save_screenshot(page,"login_fail")
+            path = garbage.save_screenshot(page,"login_fail")
             browser.close()
 
-            return False
+            return False,"",path
         
         except Exception as e:
             print(f"发生错误:{e}")
-            garbage.save_screenshot(page,"unknow_fail")
+            path = garbage.save_screenshot(page,"unknow_fail")
             browser.close()
 
-            return False
+            return False,"",path
         
-
 
 
 if __name__ == "__main__":
