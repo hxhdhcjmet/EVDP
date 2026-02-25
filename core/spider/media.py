@@ -100,7 +100,7 @@ def get_cookie():
 @dataclass
 class TiebaImageDownloader:
     url: str  # 帖子URL
-    max_pages: int = 5  # 最大爬取页数
+    max_pages: int = 8  # 最大爬取页数
     download_delay: int = 1000  # 下载延迟(毫秒)
     thread_count: int = 5  # 线程数
     max_retries: int = 3  # 最大重试次数
@@ -408,5 +408,5 @@ def tieba_crawl_all(url: str, max_pages: int = 20):
 
 if __name__ == '__main__':
     # 测试
-    url = "https://tieba.baidu.com/p/10266068882"
+    url = "https://tieba.baidu.com/p/10273265669"
     tieba_crawl_all(url, max_pages=10)
