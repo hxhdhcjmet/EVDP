@@ -16,7 +16,29 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 import logging
+import os
+from matplotlib.font_manager import FontProperties
 
+
+def load_custom_font():
+    """
+    加载指定字体
+    """
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    font_path = os.path.join(current_dir,"assets","fonts","simhei.ttf")
+
+    if not os.path.exists(font_path):
+        st.error(f"字体不存在:{font_path}")
+        return None
+
+    font_prop = FontProperties(fname = font_path,size = 12)
+    # 全局配置
+    plt.rcParams['font.sans-serif'] = [font_prop.get_name()]
+    plt.rcParams['axes.unicode_minus'] = False
+    return font_prop
+
+
+load_custom_font()
 #--------------------------------------
 #页面配置
 st.set_page_config(
