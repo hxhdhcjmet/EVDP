@@ -163,7 +163,7 @@ class Video_Comment_Extractor:
             response.raise_for_status()
             comment_json = response.json()
             if comment_json.get('code') != 0 or not comment_json.get('data'):
-                print(f'获取评论总评论数失败:{comment_json.get('message','未知错误')}')
+                print(f"获取评论总评论数失败:{comment_json.get('message','未知错误')}")
                 return 0,0
             
             # 提取总评论数和总页数
