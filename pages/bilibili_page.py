@@ -19,9 +19,14 @@ def render_bilibili_page():
         temp_extractor = Video_Comment_Extractor("https://www.bilibili.com/video/BV1qt411j7fV")
         temp_extractor.get_cookies()
 
+        # 优化登录状态验证 (使用 session_state 避免重复请求)
+        if "bilibili_login_status" not in st.session_state:
+            with st.spinner("正在验证登录状态..."):
+                st.session_state.bilibili_login_status = temp_extractor.check_login_status()
+                st.session_state.bilibili_uname = temp_extractor.uname
 
-        if temp_extractor.check_login_status():
-            st.success(f"已登陆:{temp_extractor.uname}")
+        if st.session_state.bilibili_login_status:
+            st.success(f"已登陆:{st.session_state.bilibili_uname}")
             if st.button("更新Cookie"):
                 st.session_state.show_cookie_input = True
             
@@ -34,6 +39,10 @@ def render_bilibili_page():
             if st.button("保存并验证"):
                 if new_cookie:
                     temp_extractor.save_cookie_to_file(new_cookie)
+                    # 清除状态以重新验证
+                    if "bilibili_login_status" in st.session_state:
+                        del st.session_state.bilibili_login_status
+                    st.session_state.show_cookie_input = False
                     st.rerun() # 重新加载页面以触发 get_cookies
                 else:
                     st.error("请输入内容")
@@ -58,7 +67,7 @@ def render_bilibili_page():
         for idx,url in enumerate(urls):
             st.divider()
             st.markdown(f"#### 正在处理 {idx+1} / {len(urls)} 个视频")
-            st.caption("URL:{url}")
+            st.caption(f"URL: {url}")
 
 
                     # 准备爬取
