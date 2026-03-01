@@ -23,20 +23,34 @@ def render_douyin_page():
         cookie_path = os.path.join(base_dir, "core", "spider", "douyin", "cookies", "cookie.json")
         if os.path.exists(cookie_path):
             st.caption(f"Cookie路径: {cookie_path}")
-            # 登陆验证
-            is_logged,username,path = verify_cookie()
+            
+            # 优化登录验证 (使用 session_state 避免重复验证)
+            if "douyin_login_status" not in st.session_state:
+                with st.spinner("正在验证登录状态..."):
+                    is_logged, username, path = verify_cookie()
+                    st.session_state.douyin_login_status = is_logged
+                    st.session_state.douyin_username = username
+                    st.session_state.douyin_avatar_path = path
+            
+            is_logged = st.session_state.douyin_login_status
+            username = st.session_state.douyin_username
+            avatar_path = st.session_state.douyin_avatar_path
+
             if is_logged:
                 st.success("登陆有效!")
                 st.text(f"用户名:{username}")
-                st.image(path,width = 150)
+                st.image(avatar_path, width=150)
             else:
                 st.error("登陆失效，请重新登陆!")
-                st.image(path,width = 150)
+                st.image(avatar_path, width=150)
             
             if st.button("重新登陆 (覆盖Cookie)"):
                 try:
                     with st.spinner("正在启动浏览器进行扫码登陆..."):
                         login_and_save_cookies()
+                    # 清除状态以重新验证
+                    if "douyin_login_status" in st.session_state:
+                        del st.session_state.douyin_login_status
                     st.success("登陆成功！")
                     st.rerun()
                 except Exception as e:
@@ -47,6 +61,9 @@ def render_douyin_page():
                 try:
                     with st.spinner("正在启动浏览器进行扫码登陆..."):
                         login_and_save_cookies()
+                    # 清除状态以重新验证
+                    if "douyin_login_status" in st.session_state:
+                        del st.session_state.douyin_login_status
                     st.success("登陆成功！")
                     st.rerun()
                 except Exception as e:
