@@ -218,3 +218,6 @@ data/
 
 # html
 *.html
+
+# garbage文件夹
+core/spider/douyin/garbage/
