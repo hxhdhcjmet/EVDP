@@ -8,6 +8,11 @@ from core.spider.bilibili.CommentAnalyser import CommentAnalyser
 
 def render_bilibili_page():
     st.title("📺 Bilibili 评论全自动采集与分析")
+    st.set_page_config(
+        page_title = "Bilibili 评论采集与分析",
+        page_icon="icon/bilibili.webp",
+        layout = "wide"    
+    )
 
     #------ 侧边栏 ------
     # Cookie 管理
@@ -48,7 +53,7 @@ def render_bilibili_page():
                     st.error("请输入内容")
 
         # ------主界面------任务输入
-    st.subheader("🚀 采集任务")
+    st.subheader("采集任务")
     url_input = st.text_area("输入视频链接(多个链接请换行)",placeholder="https://www.bilibili.com/video/BV1xxxx\nhttps://www.bilibili.com/video/BV2xxxx")
 
     col1,col2 = st.columns([1,4])

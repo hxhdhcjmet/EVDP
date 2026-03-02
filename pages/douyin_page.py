@@ -10,6 +10,11 @@ from core.spider.douyin.douyin_login import login_and_save_cookies
 from core.spider.douyin.verify_cookie import verify_cookie
 def render_douyin_page():
     st.title("🎵 抖音评论全自动采集与分析")
+    st.set_page_config(
+        page_title = "抖音评论采集与分析",
+        page_icon= "icon/douyin.jpg",
+        layout = "wide"     
+    )
 
     # ------ 侧边栏 ------
     # Cookie 管理
@@ -18,12 +23,11 @@ def render_douyin_page():
         
         # 检查 Cookie 文件是否存在
         # 假设 cookie 存储在 core/spider/douyin/cookies/cookie.json
-        # 我们使用相对路径查找
+        # 使用相对路径查找
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         cookie_path = os.path.join(base_dir, "core", "spider", "douyin", "cookies", "cookie.json")
         if os.path.exists(cookie_path):
-            st.caption(f"Cookie路径: {cookie_path}")
-            
+            # st.caption(f"Cookie路径: {cookie_path}")
             # 优化登录验证 (使用 session_state 避免重复验证)
             if "douyin_login_status" not in st.session_state:
                 with st.spinner("正在验证登录状态..."):

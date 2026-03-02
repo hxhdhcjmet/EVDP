@@ -6,7 +6,12 @@ from core.spider.tieba.auth import AuthManager
 from core.spider.tieba.scraper import TiebaAsyncScraper
 
 def render_tieba_page():
-    st.title("📌 百度贴吧帖子全自动采集")
+    st.title("📌 百度贴吧帖子自动采集")
+    st.set_page_config(
+        page_title = "百度贴吧帖子采集",
+        page_icon = "icon/tieba.webp",
+        layout = "wide"
+    )
 
     # ------ 侧边栏：账户配置 ------
     auth = AuthManager()
@@ -52,8 +57,8 @@ def render_tieba_page():
                     st.error("请输入 Cookie")
 
     # ------ 主界面：任务输入 ------
-    st.subheader("🚀 采集任务")
-    url_input = st.text_area("输入帖子链接 (每行一个)", placeholder="https://tieba.baidu.com/p/8419121896", height=100)
+    st.subheader("采集任务")
+    url_input = st.text_area("输入帖子链接 (每行一个)", placeholder="https://tieba.baidu.com/p/xxx", height=100)
 
     col1, col2 = st.columns(2)
     with col1:
@@ -117,7 +122,6 @@ def render_tieba_page():
             except Exception as e:
                 st.error(f"采集过程中发生错误 ({url}): {str(e)}")
         
-        st.balloons()
 
 if __name__ == "__main__":
     render_tieba_page()
