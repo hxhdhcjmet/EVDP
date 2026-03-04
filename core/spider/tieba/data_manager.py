@@ -17,7 +17,7 @@ class DataManager:
         self.file_path = os.path.join(self.path, "posts.jsonl")
 
     async def save_post_jsonl(self, data: dict):
-        """真正意义上的异步追加写入"""
+        """异步追加写入"""
         async with aiofiles.open(self.file_path, mode='a', encoding='utf-8') as f:
             line = json.dumps(data, ensure_ascii=False, default=str)
             await f.write(line + '\n')
