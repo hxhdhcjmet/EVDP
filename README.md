@@ -16,57 +16,113 @@ EVDP 是一款集成化数据处理、分析与采集工具，旨在为研究人
 
 ---
 
-## 🛠️ 功能模块
+## 🛠️ 快速开始
 
-### 1. 爬虫中心 (Crawler Hub)
-- **Bilibili**：异步采集长视频评论，包含 IP 属地及等级过滤。
-- **抖音**：支持手机版/网页版双模式，高仿真模拟用户滚动。
-- **百度贴吧**：支持多链接批量采集、**Max 全页数模式**及图片自动下载。
+本章节提供跨平台的部署指南，确保新用户能快速上手。
 
-### 2. 数据处理与分析 (Analysis Suite)
-- **预处理**：自动缺失值填充、离群点检测及数据归一化。
-- **拟合模型**：单元回归、多元回归及插值分析。
-- **高维分析**：因子载荷矩阵、方差解释率及多维特征聚类。
+### 1. 代码获取
+使用 Git 克隆仓库或直接下载压缩包：
+```bash
+# HTTPS 克隆
+git clone https://github.com/user/EVDP.git
+# 或 SSH 克隆
+git clone git@github.com:user/EVDP.git
+```
 
----
+### 2. 分平台配置指南
 
-## 🚀 快速开始
-
-### 方案 A：本地运行 (推荐)
-
-1. **安装 Python 3.10+**
-2. **安装依赖项**：
-   ```bash
+#### 💻 Windows
+1. **环境要求**：Python 3.10+ (建议从 [python.org](https://www.python.org/) 下载)
+2. **依赖安装**：
+   ```powershell
+   python -m venv venv
+   .\venv\Scripts\activate
    pip install -r requirements.txt
-   ```
-3. **安装浏览器引擎 (用于爬虫)**：
-   ```bash
    playwright install chromium
    ```
-4. **运行应用**：
+3. **配置验证**：
+   ```powershell
+   streamlit hello  # 验证 Streamlit 基础环境
+   ```
+
+#### 🍎 macOS
+1. **环境要求**：Python 3.10+ (建议使用 `brew install python@3.10`)
+2. **依赖安装**：
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
+   pip install -r requirements.txt
+   playwright install chromium
+   ```
+3. **配置验证**：
+   ```bash
+   python3 --version  # 预期输出: Python 3.10.x 或更高
+   ```
+
+#### 🐧 Linux
+1. **环境要求**：Python 3.10+ 及系统库（如 `libnss3` 用于 Playwright）
+2. **依赖安装**：
+   ```bash
+   # 以 Ubuntu 为例安装系统依赖
+   sudo apt-get update && sudo apt-get install -y libnss3 libatk-bridge2.0-0 libxcomposite1
+   python3 -m venv venv
+   source venv/bin/activate
+   pip install -r requirements.txt
+   playwright install chromium
+   ```
+3. **配置验证**：
+   ```bash
+   pip list | grep streamlit  # 预期输出包含 streamlit 版本信息
+   ```
+
+### 3. 配置与启动流程
+
+1. **注入身份验证 (以 Bilibili 为例)**：
+   在浏览器控制台获取 `Cookie` 后，直接在应用侧边栏粘贴：
+   ```javascript
+   // 示例：从控制台提取
+   document.cookie; // 复制输出的字符串
+   ```
+2. **启动应用**：
+   在项目根目录下运行：
    ```bash
    streamlit run app.py
    ```
-
-### 方案 B：Docker 部署
-
-1. **构建镜像**：
-   ```bash
-   docker build -t evdp-app .
+   **预期输出**：
+   ```text
+   Local URL: http://localhost:8501
+   Network URL: http://192.168.x.x:8501
    ```
-2. **运行容器**：
-   ```bash
-   docker run -p 8501:8501 evdp-app
-   ```
+
+### 4. 常见配置错误排查 (FAQ)
+
+| 错误现象 | 可能原因 | 解决方案 |
+| :--- | :--- | :--- |
+| `ModuleNotFoundError` | 虚拟环境未激活 | 重新执行 `activate` 命令并确认终端前缀有 `(venv)` |
+| `Playwright Error` | 浏览器引擎未安装 | 执行 `playwright install chromium` |
+| `Port 8501 busy` | 端口被占用 | 运行 `fuser -k 8501/tcp` (Linux) 或重启应用 |
+| 字体显示乱码 | 系统缺失中文字体 | 确保安装了 `SimHei` 或参考 `core/visualize.py` 配置 |
+
+---
+
+## 🐳 Docker 部署
+
+如果你希望在容器中运行：
+```bash
+# 构建镜像
+docker build -t evdp-app .
+
+# 运行容器 (映射 8501 端口)
+docker run -p 8501:8501 evdp-app
+```
 
 ---
 
 ## 📂 项目结构
-
 ```text
 /EVDP
 ├── app.py             # 主入口 (数据处理与拟合)
-├── pages/             # 独立功能页面 (各平台爬虫)
+├── pages/             # 独立功能页面
 │   ├── bilibili_page.py
 │   ├── douyin_page.py
 │   └── tieba_page.py
