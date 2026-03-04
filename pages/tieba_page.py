@@ -4,6 +4,7 @@ import os
 import re
 from core.spider.tieba.auth import AuthManager
 from core.spider.tieba.scraper import TiebaAsyncScraper
+import random
 
 def render_tieba_page():
     st.title("📌 百度贴吧帖子自动采集")
