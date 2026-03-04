@@ -61,15 +61,21 @@ class TiebaAsyncScraper:
                     return sub_replies
             except: return []
 
+    def _extract_time(self,element):
+        """ 获取发布时间"""
+        tails = element.find('div',class_ = 'post-tail-wrap')
+        all_span = tails.find_all('span',class_ = 'tail-info')
+        reply_time = all_span[2].get_text(strip = True) if len(all_span) >= 3 else "未知"
+        return reply_time
+
     def _extract_ip(self, element):
         """从元素中提取 IP 属地"""
-        tails = element.find_all('span', class_='post-tail-wrap')
-        for t in tails:
-            txt = t.get_text(strip=True)
-            if "IP属地" in txt:
-                return txt.replace("IP属地:", "").strip()
+        tails = element.find('div', class_='post-tail-wrap')
+        all_span = tails.find_all('span')
+        ip_location = all_span[0].get_text(strip = True)
+        if "IP属地" in ip_location:
+            return ip_location.replace("IP属地:","").strip()
         
-        # 有些情况下 IP 属地在 lzl_content_reply 的文本里
         lzl_tails = element.find_all('span', class_='lzl_time')
         for t in lzl_tails:
             parent = t.parent
@@ -77,6 +83,21 @@ class TiebaAsyncScraper:
                 match = re.search(r'IP属地:(\w+)', parent.get_text())
                 if match: return match.group(1)
         return "未知"
+    
+    def _extract_user_id(self,element):
+        """提取用户ID"""
+        user_id_tag = element.find('li',class_ = 'd_name').get('data-field','')
+        if user_id_tag:
+            user_id_json = json.loads(user_id_tag)
+            return user_id_json.get('user_id',"未知id")
+        return ""
+
+    def _extract_user_name(self,element):
+        """提取用户名"""
+        user_name = element.find('a',class_ = 'p_author_name j_user_card')
+        if user_name:
+            return user_name.get_text(strip = True)
+        return ""
 
     def parse_floor_generator(self, html: str, fetch_img: bool):
         """使用生成器逐条解析，提高内存效率"""
@@ -90,8 +111,11 @@ class TiebaAsyncScraper:
                 content_div = post.find('div', class_='d_post_content')
                 if not content_div: continue
 
-                # --- 提取 IP 属地 ---
+                # --- 提取 IP 属地,回复时间 ---
                 ip_location = self._extract_ip(post)
+                reply_time = self._extract_time(post)
+                user_id = self._extract_user_id(post)
+                user_name = self._extract_user_name(post)
 
                 # 提取子回复 (抓取该楼层的所有子回复)
                 sub_replies = []
@@ -102,7 +126,8 @@ class TiebaAsyncScraper:
                         sub_replies.append({
                             "user": c.find('a', class_='j_user_card').get_text(strip=True) if c.find('a', class_='j_user_card') else "匿名",
                             "text": c_body.get_text(strip=True),
-                            "ip_location": self._extract_ip(c)
+                            "ip_location": self._extract_ip(c),
+                            "time" : self._extract_time(c)
                         })
                 
                 img_urls = [img['src'] for img in content_div.find_all('img', class_='BDE_Image')] if fetch_img else []
@@ -112,14 +137,15 @@ class TiebaAsyncScraper:
                 item_to_yield = {
                     "pid": pid,
                     "floor": d_field.get('content', {}).get('post_no'),
-                    "author": d_field.get('author', {}).get('user_name'),
+                    "user_id": user_id,
+                    "author": user_name,
                     "ip_location": ip_location,
                     "content": content_div.get_text(strip=True),
                     "sub_replies": sub_replies,
                     "has_more_lzl": total_lzl > len(sub_replies),
                     "total_lzl": total_lzl,
                     "images": img_urls,
-                    "time": next((t.get_text(strip=True) for t in post.find_all('span', class_='post-tail-wrap') if re.search(r'\d{4}-\d{2}', t.get_text())), "未知")
+                    "time": reply_time 
                 }
                 yield item_to_yield
             except: continue
