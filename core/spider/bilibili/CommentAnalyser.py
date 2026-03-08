@@ -7,6 +7,7 @@ import jieba
 from jieba import analyse
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
+import seaborn as sns
 from wordcloud import WordCloud
 
 # 配置中文字体
@@ -77,6 +78,21 @@ class CommentAnalyser:
             return self
         except Exception as e:
             print(f'读取文件发生错误:{e}')
+    
+    def load_stopwords(self):
+        """
+        到assets/stopwords/中获取bilibili_stopwords.txt停用词语表
+        """
+        stopwords_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),'assets','stopwords','bilibili_stopwords.txt')
+        try:
+            with open(stopwords_path, 'r',encoding = 'utf-8') as f:
+                for line in f:
+                    word = line.strip()
+                    if word:
+                        self.stopwords.add(word)
+            print("加载停用词表成功!")
+        except Exception as e:
+            print("获取停用词表发生错误",e)
             
 
 
@@ -124,8 +140,8 @@ class CommentAnalyser:
             """生成词云图"""
             try:
                 curr_dir = os.path.dirname(os.path.abspath(__file__))
-                # 简化路径逻辑：向上退两级到根目录
-                root_dir = os.path.abspath(os.path.join(curr_dir, "../.."))
+                # 向上退三级到项目根目录
+                root_dir = os.path.abspath(os.path.join(curr_dir, "../../.."))
                 font_path = os.path.join(root_dir, 'assets/fonts/simhei.ttf')
                 if not os.path.exists(font_path): font_path = None
             except:
@@ -158,12 +174,10 @@ class CommentAnalyser:
         """
         时间密度分析 - 增强版（解决 DatetimeIndex 报错）
         """
-        # 1. 基础检查：确保 df 存在且不为空
         if self.df is None or self.df.empty:
             print("警告：数据为空，无法生成时间密度图")
             return None
 
-        # 2. 核心修复：确保 ctime 是 datetime 格式
         # 即使 preprocess 跑过了，这里再检查一遍更稳健
         try:
             if not pd.api.types.is_datetime64_any_dtype(self.df['ctime']):
@@ -177,35 +191,31 @@ class CommentAnalyser:
                 print("警告：没有有效的时间数据")
                 return None
 
-            # 3. 核心修复：显式将 ctime 设为索引并排序
             temp_df = temp_df.set_index('ctime').sort_index()
 
         except Exception as e:
             print(f"处理时间序列索引时发生错误: {e}")
             return None
 
-        # 4. 执行重采样
+        #  执行重采样
         try:
             # size() 统计每个频率区间内的评论数量
             ts = temp_df.resample(freq).size()
             
-            # 如果重采样后数据太少（比如只有1个点），plot 会报错或很难看
             if len(ts) < 1:
                 return None
 
-            # 5. 绘图
-            # 注意：这里要用 plt.subplots() 确保 fig 和 ax 的正确对应
+            #  绘图
             fig, ax = plt.subplots(figsize=(12, 6))
-            
-            # ts 是 Series，可以直接调用 plot
-            ts.plot(ax=ax, color='#1f77b4', marker='.', markersize=4, linewidth=1)
-            
-            ax.set_title("Comments Time Density Distribution", fontsize=14, pad=20)
-            ax.set_xlabel('Time (Interval: {})'.format(freq), fontsize=12)
-            ax.set_ylabel('Comment Count', fontsize=12)
-            
-            # 优化视觉效果
-            ax.grid(True, linestyle='--', alpha=0.6)
+
+            plot_df = ts.reset_index(name='count')
+            sns.lineplot(data=plot_df, x='ctime', y='count', ax=ax, color='#ff4b4b', linewidth=1.8)
+            ax.fill_between(plot_df['ctime'], plot_df['count'], color='#ffb3b3', alpha=0.35)
+
+            ax.set_title("评论时间密度分布", fontsize=14, pad=20)
+            ax.set_xlabel('时间间隔: {}'.format(freq), fontsize=12)
+            ax.set_ylabel('评论数量', fontsize=12)
+            ax.grid(True, linestyle='--', alpha=0.45)
             plt.xticks(rotation=45)
             fig.tight_layout()
 
@@ -253,7 +263,6 @@ class CommentAnalyser:
             ip_names.append('Others')
             ip_values.append(others)
         
-        # 假设 PROVINCE_MAP 已在外部定义
         eng_indices = [PROVINCE_MAP.get(name, "Others") for name in ip_names]
 
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(18, 7))
