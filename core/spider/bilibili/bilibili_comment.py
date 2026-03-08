@@ -251,6 +251,90 @@ class Video_Comment_Extractor:
             comment_data['replies'] = self.get_sub_replies(reply['rpid'])
 
         return comment_data
+
+    def build_comment_data_base(self, reply):
+        """
+        只组织主评论结构，子评论异步补充
+        """
+        return {
+            'comment': reply['content']['message'],
+            'like': reply['like'],
+            'reply_count': reply['rcount'],
+            'ctime': reply['ctime'],
+            'user': {
+                'name': reply['member']['uname'],
+                'level': reply['member']['level_info']['current_level'],
+                'ip': self.extract_ip(reply)
+            },
+            'replies': []
+        }
+
+    async def get_sub_replies_async(self, session, sem, root_rpid, max_pages=50, max_retries=3):
+        """
+        异步分页抓取子评论，带重试与防死循环保护
+        """
+        sub_replies = []
+        pn = 1
+        seen_page_first_rpid = set()
+
+        while True:
+            if pn > max_pages:
+                print(f'[警告] 子评论分页超过上限({max_pages})，root_rpid={root_rpid}，提前停止')
+                break
+
+            params = {
+                'oid': self.video_aid,
+                'type': 1,
+                'root': root_rpid,
+                'pn': pn,
+                'ps': 20
+            }
+
+            replies = None
+            last_error = None
+
+            for attempt in range(1, max_retries + 1):
+                try:
+                    async with sem:
+                        await asyncio.sleep(random.uniform(0.2, 0.5))
+                        async with session.get(self.reply_api, params=params, timeout=15) as resp:
+                            data = await resp.json()
+                    if data.get('code') != 0:
+                        raise RuntimeError(f"子评论接口异常: {data.get('message', '未知错误')} (code={data.get('code')})")
+                    replies = data.get('data', {}).get('replies', [])
+                    # B站子评论在无更多数据时可能返回 None，这里按空列表处理
+                    if replies is None:
+                        replies = []
+                    break
+                except Exception as e:
+                    last_error = e
+                    if attempt < max_retries:
+                        await asyncio.sleep(0.4 * attempt)
+
+            if replies is None:
+                print(f'[错误] 子评论抓取失败 root_rpid={root_rpid}, pn={pn}, 原因: {last_error}')
+                break
+
+            if not replies:
+                break
+
+            first_rpid = replies[0].get('rpid')
+            if first_rpid in seen_page_first_rpid:
+                print(f'[警告] 检测到子评论分页重复，疑似游标未推进，root_rpid={root_rpid}, pn={pn}')
+                break
+            seen_page_first_rpid.add(first_rpid)
+
+            for r in replies:
+                sub_replies.append({
+                    'comment': r['content']['message'],
+                    'like': r['like'],
+                    'user': r['member']['uname'],
+                    'level': r['member']['level_info']['current_level'],
+                    'ip': self.extract_ip(r)
+                })
+            pn += 1
+
+        return sub_replies
     
     # 新增异步爬取
 
@@ -276,23 +360,34 @@ class Video_Comment_Extractor:
             
 
 
-    async def crawl_all_comments_async(self, writer, order='time',callback = None):
+    async def crawl_all_comments_async(self, writer, order='time', callback=None, max_concurrency=3, max_main_comments=None):
         """
         异步爬取，修复进度统计逻辑
         """
-        # 1. 先获取一次元数据（总数）
+        #  先获取一次元数据（总数）
         total_count, _ = self.get_total_comments_and_pages(order)
         if total_count == 0:
             print('无评论，结束')
             return
 
-        # 2. 初始化统计器 (使用 tqdm)
+        target_count = total_count
+        if max_main_comments is not None:
+            try:
+                max_main_comments = int(max_main_comments)
+                if max_main_comments > 0:
+                    target_count = min(max_main_comments, total_count)
+            except Exception:
+                pass
+
+        # 初始化统计器 (使用 tqdm)
         ps = 20
-        stats = AsyncCrawStats(total_count, ps=ps)
+        stats = AsyncCrawStats(target_count, ps=ps)
         
         mode = 2 if order == 'time' else 3
         next_offset = 0
         is_end = False
+
+        sem = asyncio.Semaphore(max(1, min(int(max_concurrency), 10)))
 
         async with aiohttp.ClientSession(headers=self.headers) as session:
             while not is_end:
@@ -305,47 +400,81 @@ class Video_Comment_Extractor:
                 }
                 try:
                     # 随机延迟，保护 IP
-                    await asyncio.sleep(random.uniform(1.0, 2.0))
+                    await asyncio.sleep(random.uniform(0.5, 1.0))
 
-                    async with session.get(self.comment_api, params=params, timeout=15) as resp:
-                        res_data = await resp.json()
-                        
-                        if res_data.get('code') != 0:
-                            # 触发验证码或频率限制
-                            stats.pbar.set_description(f"中断: {res_data.get('message')}")
+                    res_data = None
+                    last_error = None
+                    for attempt in range(1, 4):
+                        try:
+                            async with session.get(self.comment_api, params=params, timeout=15) as resp:
+                                res_data = await resp.json()
                             break
-                        
-                        data = res_data.get('data', {})
-                        replies = data.get('replies', [])
+                        except Exception as e:
+                            last_error = e
+                            if attempt < 3:
+                                await asyncio.sleep(0.5 * attempt)
+                    if res_data is None:
+                        raise RuntimeError(f'主评论请求失败: {last_error}')
 
-                        # 情况 A：返回空列表，说明到底了
-                        if not replies:
-                            break
-                        
-                        # 写入数据
-                        for reply in replies:
-                            comment_item = self.build_comment_data(reply)
-                            writer.write(comment_item)
+                    if res_data.get('code') != 0:
+                        # 触发验证码或频率限制
+                        msg = res_data.get('message', '未知错误')
+                        stats.pbar.set_description(f"中断: {msg}")
+                        print(f"[错误] 主评论接口中断: code={res_data.get('code')}, message={msg}")
+                        break
 
-                        # 更新指针
-                        cursor = data.get('cursor', {})
-                        next_offset = cursor.get('next')
-                        is_end = cursor.get('is_end', False)
+                    data = res_data.get('data', {})
+                    replies = data.get('replies', [])
 
-                        # 更新 tqdm 进度
-                        stats.update(len(replies))
+                    # 返回空列表，说明到底了
+                    if not replies:
+                        break
 
-                        if callback:
-                            # 计算百分比传给streamlit
-                            percent = min(stats.current_step / stats.total_steps,1.0)
-                            callback(percent,f"已爬取{stats.current_comment}条评论...")
+                    comment_items = [self.build_comment_data_base(r) for r in replies]
+                    task_meta = []
+                    tasks = []
+                    for idx, reply in enumerate(replies):
+                        if reply.get('rcount', 0) > 0:
+                            task_meta.append((idx, reply.get('rpid')))
+                            tasks.append(self.get_sub_replies_async(session, sem, reply.get('rpid')))
 
-                        if is_end:
-                            stats.force_finish() # 强制拉满进度条
-                            break
+                    if tasks:
+                        sub_results = await asyncio.gather(*tasks, return_exceptions=True)
+                        for (item_idx, rpid), result in zip(task_meta, sub_results):
+                            if isinstance(result, Exception):
+                                print(f'[错误] 子评论任务失败 rpid={rpid}, 原因: {result}')
+                            else:
+                                comment_items[item_idx]['replies'] = result
+
+                    # 写入数据
+                    for item in comment_items:
+                        writer.write(item)
+
+                    # 更新指针
+                    cursor = data.get('cursor', {})
+                    next_offset = cursor.get('next')
+                    is_end = cursor.get('is_end', False)
+
+                    # 更新 tqdm 进度
+                    stats.update(len(replies))
+
+                    if callback:
+                        # 计算百分比传给streamlit
+                        percent = min(stats.current_step / stats.total_steps, 1.0)
+                        callback(percent, f"已爬取主评论{stats.current_comments}/{target_count}条...")
+
+                    # 达到阈值后，当前页已补齐，直接停止
+                    if stats.current_comments >= target_count:
+                        stats.force_finish()
+                        break
+
+                    if is_end:
+                        stats.force_finish()  # 强制拉满进度条
+                        break
 
                 except Exception as e:
-                    stats.pbar.set_description(f"异常: {str(e)[:20]}")
+                    stats.pbar.set_description(f"异常: {str(e)}")
+                    print(f'[错误] 爬取异常: {e}')
                     break
                     
         stats.close()
