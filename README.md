@@ -13,7 +13,7 @@ EVDP 是一款以网络爬虫为主，集成化数据处理、分析与采集的
 - **极致的爬虫风控**：内置自适应请求延迟、IP 属地伪装及多级并发限制策略，保证采集任务的稳定性。
 - **视觉化数据交互**：支持通过**交互式画布**直接点击添加数据点，或一键上传 CSV/Excel 自动导入。
 - **平衡性能与使用**：基于cookie登录,初次使用登录一次即可保存登录状态。根据平台严格程度分别采用网页解析、接口获取等不同策略。
-- **简易可视化设计**：基于streamlit框架搭建交互式网页,操作、配置简单明了,便于快速开始。
+- **简易可视化设计**：基于streamlit框架搭建交互式网页,操作、配置简单明了,便于快速开始、文件查看处理等。
 - **高级统计分析**：内置 PCA（主成分分析）、因子分析、聚类分析及多种线性/非线性回归模型，助力深度挖掘数据价值。
 - **精美可视化报告**：一键生成词云图、时间分布图、IP 地理分布及情感分析报告。
 
@@ -144,6 +144,21 @@ docker run -p 8501:8501 evdp-app
 │
 └── data/              # 爬取到的评论
 ```
+## 效果展示
+#### 文本查看
+<div align="center">
+  <img src="https://github.com/hxhdhcjmet/blogimage/blob/main/comment.png?raw=true" width="600">
+</div>
+
+#### 评论分析
+<div align="center">
+  <img src="https://raw.githubusercontent.com/hxhdhcjmet/blogimage/7e70420f9b515b4545b0e69d2dba124f741e2ee2/analysize.png" width="600">
+</div>
+
+#### 贴吧图片下载查看
+<div align="center">
+  <img src="https://raw.githubusercontent.com/hxhdhcjmet/blogimage/bd2766e6ea4b5690fd2be08f96f4e7c9c318f215/image_download.png" width="600">
+</div>
 
 ---
 
