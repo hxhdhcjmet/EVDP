@@ -221,3 +221,13 @@ data/
 
 # garbage文件夹
 core/spider/douyin/garbage/
+
+# 练习/练手文件 (保留本地，不追踪到 Git)
+core/spider/airQuality.py
+core/spider/movieTop250.py
+core/ClusterAnalyzer.py
+core/FactorAnalyzer.py
+core/PCAAnalyzer.py
+
+# 爬虫 Cookie 文件夹
+core/spider/*/cookies/
