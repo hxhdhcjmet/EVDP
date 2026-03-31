@@ -1,6 +1,6 @@
 """
 EVDP 分析模块
-数据清洗、情感分析、IP溯源、用户画像、异常检测、综合流水线
+数据清洗、情感分析、IP溯源、用户画像、综合流水线
 """
 
 from .models import UnifiedComment, CleaningReport
@@ -13,7 +13,16 @@ from .sentiment_analyzer import (
 )
 from .ip_analyzer import IPAnalyzer, IPAnalysisResult
 from .user_profiler import UserProfiler, UserProfile, UserProfilingResult
-from .pipeline import SecurityPipeline, PipelineReport
+
+# 延迟导入 pipeline 以避免循环依赖
+def __getattr__(name):
+    if name == "SecurityPipeline":
+        from .pipeline import SecurityPipeline
+        return SecurityPipeline
+    elif name == "PipelineReport":
+        from .pipeline import PipelineReport
+        return PipelineReport
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 __all__ = [
     # 数据模型
