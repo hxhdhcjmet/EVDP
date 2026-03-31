@@ -2,7 +2,7 @@
 舆情安全分析流水线
 
 将所有分析模块串联为一条完整链路：
-清洗 → 情感分析 → IP溯源 → 用户画像 → 异常检测 → 综合评分
+清洗 → 情感分析 → IP溯源 → 用户画像 → 综合评分
 """
 
 from typing import List, Dict, Optional
@@ -67,13 +67,11 @@ class SecurityPipeline:
         from core.analysis.sentiment_analyzer import SentimentAnalyzer
         from core.analysis.ip_analyzer import IPAnalyzer
         from core.analysis.user_profiler import UserProfiler
-        from core.analysis.anomaly_detector import AnomalyDetector
 
         self.cleaner = DataCleaner()
         self.sentiment = SentimentAnalyzer()
         self.ip_analyzer = IPAnalyzer()
         self.user_profiler = UserProfiler()
-        self.anomaly_detector = AnomalyDetector()
 
     def run(self, file_path: str, progress_callback=None) -> PipelineReport:
         """
@@ -93,8 +91,8 @@ class SecurityPipeline:
 
         def _progress(step, msg):
             if progress_callback:
-                progress_callback(step, 5, msg)
-            logger.info(f"[Pipeline {step}/5] {msg}")
+                progress_callback(step, 4, msg)
+            logger.info(f"[Pipeline {step}/4] {msg}")
 
         # ── Step 1: 数据清洗 ──────────────────────────────────────────
         _progress(1, "数据清洗与标准化...")
@@ -124,7 +122,7 @@ class SecurityPipeline:
             report.sentiment_distribution = self.sentiment.get_distribution(sentiment_results)
             report.high_risk_comments = report.sentiment_distribution.get("high_risk", 0)
 
-            # 将情感结果回写到 comment_dicts（供异常检测使用）
+            # 将情感结果回写到 comment_dicts（供后续使用）
             sentiment_map = {r.comment_id: r for r in sentiment_results}
             for cd in comment_dicts:
                 sr = sentiment_map.get(cd["comment_id"])
@@ -153,18 +151,6 @@ class SecurityPipeline:
         except Exception as e:
             logger.warning(f"用户画像失败: {e}")
 
-        # ── Step 5: 异常检测 + 综合评分 ──────────────────────────────
-        _progress(5, "异常检测与综合评分...")
-        try:
-            sentiment_dicts = [
-                {"sentiment": cd.get("sentiment", "neutral"),
-                 "risk_score": cd.get("risk_score", 0)}
-                for cd in comment_dicts
-            ]
-            report.anomalies = self.anomaly_detector.detect(comment_dicts, sentiment_dicts)
-        except Exception as e:
-            logger.warning(f"异常检测失败: {e}")
-
         # 综合评分
         report.overall_score, report.overall_level, report.score_breakdown = (
             self._calc_overall_score(report)
@@ -183,10 +169,9 @@ class SecurityPipeline:
         综合评分算法（满分100）
 
         权重分配:
-          情感风险    30%
-          IP 地域     25%
-          用户画像    25%
-          异常检测    20%
+          情感风险    40%
+          IP 地域     30%
+          用户画像    30%
         """
         breakdown = {}
 
@@ -221,36 +206,18 @@ class SecurityPipeline:
                 user_score = int(sum(all_scores) / len(all_scores))
         breakdown["user"] = user_score
 
-        # 4. 异常检测分
-        anomaly_score = 0
-        if r.anomalies:
-            severity_weights = {"critical": 100, "high": 70, "medium": 40, "low": 15}
-            top_anomalies = sorted(
-                r.anomalies,
-                key=lambda x: severity_weights.get(x.severity, 0),
-                reverse=True
-            )[:3]
-            if top_anomalies:
-                anomaly_score = int(
-                    sum(severity_weights.get(a.severity, 0) for a in top_anomalies)
-                    / len(top_anomalies)
-                )
-        breakdown["anomaly"] = anomaly_score
-
         # 加权总分
         # 若 IP 数据不足，将其权重分配给其他维度
         if r.ip_result and not r.ip_result.has_sufficient_ip:
             total = int(
-                breakdown["sentiment"] * 0.40 +
-                breakdown["user"] * 0.35 +
-                breakdown["anomaly"] * 0.25
+                breakdown["sentiment"] * 0.50 +
+                breakdown["user"] * 0.50
             )
         else:
             total = int(
-                breakdown["sentiment"] * 0.30 +
-                breakdown["ip"] * 0.25 +
-                breakdown["user"] * 0.25 +
-                breakdown["anomaly"] * 0.20
+                breakdown["sentiment"] * 0.40 +
+                breakdown["ip"] * 0.30 +
+                breakdown["user"] * 0.30
             )
 
         total = min(total, 100)
@@ -263,6 +230,9 @@ class SecurityPipeline:
             level = "medium"
         else:
             level = "low"
+
+        # 异常检测分（如果可用）
+        breakdown["anomaly"] = 0
 
         return total, level, breakdown
 
@@ -289,10 +259,6 @@ class SecurityPipeline:
         # 用户画像
         for pr in r.user_profiling.values():
             findings.extend(pr.findings)
-
-        # 异常
-        for anomaly in r.anomalies[:5]:
-            findings.append(f"[{anomaly.severity.upper()}] {anomaly.description}")
 
         return findings[:15]  # 最多15条
 
