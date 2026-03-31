@@ -61,6 +61,48 @@ def get_risk_color(level):
     return colors.get(level, '#6b7280')
 
 
+def generate_markdown_report(report) -> str:
+    """生成 Markdown 格式报告"""
+    md = f"""# 舆情安全分析报告
+
+**生成时间**: {report.generated_at}  
+**数据源**: {report.source_file}  
+**平台**: {report.platform}
+
+---
+
+## 📊 综合评分
+
+| 指标 | 数值 |
+|------|------|
+| 综合风险评分 | {report.overall_score}/100 |
+| 风险等级 | **{report.overall_level.upper()}** |
+| 总评论数 | {report.total_comments} |
+| 高风险评论 | {report.high_risk_comments} |
+| 可疑账号 | {report.suspicious_users} |
+
+### 评分分解
+
+- 情感风险: {report.score_breakdown.get('sentiment', 0)}/100
+- IP 地域: {report.score_breakdown.get('ip', 0)}/100
+- 用户画像: {report.score_breakdown.get('user', 0)}/100
+- 异常检测: {report.score_breakdown.get('anomaly', 0)}/100
+
+---
+
+## 🔍 关键发现
+
+"""
+    for finding in report.key_findings:
+        md += f"- {finding}\n"
+
+    md += "\n## 💡 建议\n\n"
+    for i, rec in enumerate(report.recommendations, 1):
+        md += f"{i}. {rec}\n"
+
+    return md
+
+
 def render_security_dashboard():
     """渲染安全仪表盘"""
 
@@ -405,7 +447,7 @@ def render_security_dashboard():
 
         with col2:
             # 导出 Markdown
-            md_content = self._generate_markdown_report(report)
+            md_content = generate_markdown_report(report)
             st.download_button(
                 label="📝 导出 Markdown 报告",
                 data=md_content,
@@ -416,48 +458,6 @@ def render_security_dashboard():
 
         with col3:
             st.info("💾 报告已生成，可导出保存")
-
-
-def _generate_markdown_report(report) -> str:
-    """生成 Markdown 格式报告"""
-    md = f"""# 舆情安全分析报告
-
-**生成时间**: {report.generated_at}  
-**数据源**: {report.source_file}  
-**平台**: {report.platform}
-
----
-
-## 📊 综合评分
-
-| 指标 | 数值 |
-|------|------|
-| 综合风险评分 | {report.overall_score}/100 |
-| 风险等级 | **{report.overall_level.upper()}** |
-| 总评论数 | {report.total_comments} |
-| 高风险评论 | {report.high_risk_comments} |
-| 可疑账号 | {report.suspicious_users} |
-
-### 评分分解
-
-- 情感风险: {report.score_breakdown.get('sentiment', 0)}/100
-- IP 地域: {report.score_breakdown.get('ip', 0)}/100
-- 用户画像: {report.score_breakdown.get('user', 0)}/100
-- 异常检测: {report.score_breakdown.get('anomaly', 0)}/100
-
----
-
-## 🔍 关键发现
-
-"""
-    for finding in report.key_findings:
-        md += f"- {finding}\n"
-
-    md += "\n## 💡 建议\n\n"
-    for i, rec in enumerate(report.recommendations, 1):
-        md += f"{i}. {rec}\n"
-
-    return md
 
 
 # 渲染页面
