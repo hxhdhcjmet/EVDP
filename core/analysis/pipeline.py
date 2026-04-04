@@ -43,6 +43,31 @@ class PipelineReport:
     high_risk_comments: int = 0
     suspicious_users: int = 0
 
+    def save_report(self, output_dir: str = None, source_url: str = "", formats: list = None) -> dict:
+        """
+        保存分析报告到文件
+        
+        Args:
+            output_dir: 输出目录，默认为数据源所在目录
+            source_url: 数据来源URL（帖子链接等）
+            formats: 报告格式列表 ['md', 'json', 'html', 'txt']
+            
+        Returns:
+            生成的文件路径字典
+        """
+        from core.analysis.report_generator import ReportGenerator, ReportConfig
+        
+        if output_dir is None:
+            import os
+            output_dir = os.path.dirname(self.source_file) or "./"
+        
+        if formats is None:
+            formats = ['md', 'json', 'html', 'txt']
+        
+        config = ReportConfig(formats=formats)
+        generator = ReportGenerator(self, config)
+        return generator.save(output_dir, source_url)
+
 
 class SecurityPipeline:
     """
@@ -53,11 +78,11 @@ class SecurityPipeline:
         report = pipeline.run("/path/to/data.jsonl")
     """
 
-    def __init__(self, risk_threshold: int = 60, analysis_limit: int = 500):
+    def __init__(self, risk_threshold: int = 60, analysis_limit: int = None):
         """
         Args:
             risk_threshold: 高风险评论判定阈值
-            analysis_limit:  情感分析最大条数（性能保护）
+            analysis_limit:  情感分析最大条数，None 表示不限制（分析全部）
         """
         self.risk_threshold = risk_threshold
         self.analysis_limit = analysis_limit
@@ -117,7 +142,11 @@ class SecurityPipeline:
         # ── Step 2: 情感分析 ──────────────────────────────────────────
         _progress(2, "情感分析与风险评估...")
         try:
-            sample = comment_dicts[:self.analysis_limit]
+            # 如果 analysis_limit 为 None，则分析全部数据
+            if self.analysis_limit is None:
+                sample = comment_dicts
+            else:
+                sample = comment_dicts[:self.analysis_limit]
             sentiment_results = self.sentiment.analyze_batch(sample)
             report.sentiment_distribution = self.sentiment.get_distribution(sentiment_results)
             report.high_risk_comments = report.sentiment_distribution.get("high_risk", 0)

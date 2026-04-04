@@ -110,8 +110,6 @@ def render_security_dashboard():
     st.markdown("一键式完整安全分析：清洗 → 情感 → IP溯源 → 用户画像 → 异常检测")
 
     # 初始化 session state
-    if 'pipeline' not in st.session_state:
-        st.session_state.pipeline = SecurityPipeline()
     if 'report' not in st.session_state:
         st.session_state.report = None
 
@@ -155,13 +153,18 @@ def render_security_dashboard():
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        analysis_limit = st.slider(
-            "分析数量限制",
-            min_value=50,
-            max_value=1000,
-            value=300,
-            help="情感分析最大条数（性能保护）"
-        )
+        analyze_all = st.checkbox("分析全部数据", value=True, help="勾选则分析所有评论，取消可设置数量限制")
+        if not analyze_all:
+            analysis_limit = st.slider(
+                "分析数量限制",
+                min_value=50,
+                max_value=10000,
+                value=500,
+                step=50,
+                help="情感分析最大条数"
+            )
+        else:
+            analysis_limit = None  # None 表示不限制
 
     with col2:
         risk_threshold = st.slider(
@@ -197,10 +200,15 @@ def render_security_dashboard():
             if not data_source:
                 st.error("请先选择数据源！")
             else:
+                # 使用当前配置创建 pipeline
+                pipeline = SecurityPipeline(
+                    risk_threshold=risk_threshold,
+                    analysis_limit=analysis_limit
+                )
                 # 执行流水线
                 with st.spinner("正在执行完整分析流水线..."):
                     try:
-                        report = st.session_state.pipeline.run(data_source)
+                        report = pipeline.run(data_source)
                         st.session_state.report = report
                         st.success("✓ 分析完成！")
                     except Exception as e:
@@ -210,7 +218,6 @@ def render_security_dashboard():
 
     with col2:
         if st.button("🔄 重置", use_container_width=True):
-            st.session_state.pipeline = SecurityPipeline()
             st.session_state.report = None
             st.rerun()
 
@@ -419,10 +426,54 @@ def render_security_dashboard():
         st.markdown("---")
         st.markdown("#### 📥 导出报告")
 
-        col1, col2, col3 = st.columns(3)
+        # 输入来源URL
+        source_url = st.text_input("来源链接（可选）", value="", key="source_url_input",
+                                   help="输入帖子或视频的原始链接，将记录在报告中")
+
+        # 选择报告格式
+        st.markdown("**选择报告格式:**")
+        fmt_md = st.checkbox("Markdown (.md)", value=True, key="fmt_md")
+        fmt_json = st.checkbox("JSON (.json)", value=True, key="fmt_json")
+        fmt_html = st.checkbox("HTML (.html)", value=True, key="fmt_html")
+        fmt_txt = st.checkbox("TXT (.txt)", value=False, key="fmt_txt")
+
+        col1, col2 = st.columns(2)
 
         with col1:
-            # 导出 JSON
+            # 保存到文件
+            if st.button("💾 保存报告到数据目录", type="primary", use_container_width=True):
+                formats = []
+                if fmt_md: formats.append('md')
+                if fmt_json: formats.append('json')
+                if fmt_html: formats.append('html')
+                if fmt_txt: formats.append('txt')
+                
+                if not formats:
+                    st.error("请至少选择一种报告格式！")
+                else:
+                    try:
+                        # 获取数据目录
+                        import os
+                        data_dir = os.path.dirname(report.source_file) or "/home/EVDP/data"
+                        
+                        # 保存报告
+                        saved_files = report.save_report(
+                            output_dir=data_dir,
+                            source_url=source_url,
+                            formats=formats
+                        )
+                        
+                        st.success("✓ 报告已保存！")
+                        for fmt, path in saved_files.items():
+                            st.code(path, language=None)
+                    except Exception as e:
+                        st.error(f"保存失败: {e}")
+
+        with col2:
+            # 在线下载
+            st.markdown("**或在线下载:**")
+            
+            # 准备下载内容
             report_json = {
                 'source_file': report.source_file,
                 'platform': report.platform,
@@ -437,27 +488,24 @@ def render_security_dashboard():
                 'recommendations': report.recommendations,
             }
 
-            st.download_button(
-                label="📊 导出 JSON 报告",
-                data=json.dumps(report_json, ensure_ascii=False, indent=2),
-                file_name=f"security_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                mime="application/json",
-                use_container_width=True
-            )
-
-        with col2:
-            # 导出 Markdown
-            md_content = generate_markdown_report(report)
-            st.download_button(
-                label="📝 导出 Markdown 报告",
-                data=md_content,
-                file_name=f"security_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
-                mime="text/markdown",
-                use_container_width=True
-            )
-
-        with col3:
-            st.info("💾 报告已生成，可导出保存")
+            dl_col1, dl_col2 = st.columns(2)
+            with dl_col1:
+                st.download_button(
+                    label="📊 JSON",
+                    data=json.dumps(report_json, ensure_ascii=False, indent=2),
+                    file_name=f"security_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                    mime="application/json",
+                    use_container_width=True
+                )
+            with dl_col2:
+                md_content = generate_markdown_report(report)
+                st.download_button(
+                    label="📝 Markdown",
+                    data=md_content,
+                    file_name=f"security_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
+                    mime="text/markdown",
+                    use_container_width=True
+                )
 
 
 # 渲染页面
