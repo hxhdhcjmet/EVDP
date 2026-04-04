@@ -231,3 +231,6 @@ core/PCAAnalyzer.py
 
 # 爬虫 Cookie 文件夹
 core/spider/*/cookies/
+
+# visualize 页面已废弃，不再追踪
+pages/06_visualize.py
