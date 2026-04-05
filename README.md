@@ -1,21 +1,16 @@
-
-
-
 # EVDP (Easy & Visual Data Processor) 🚀
 
-EVDP 是一款以网络爬虫为主，集成化数据处理、分析与采集的工具，旨在为研究人员、开发者及非技术用户提供直观且强大的全栈数据流水线。
+EVDP 是一款专注于**舆情安全分析**的全栈数据流水线工具，集成多平台数据采集、清洗、分析与可视化报告导出能力。
 
 ---
 
 ## 🌟 核心优势
 
-- **全平台爬虫矩阵**：深度适配 **Bilibili、抖音、百度贴吧**，支持多链接并行/顺序采集。
-- **极致的爬虫风控**：内置自适应请求延迟、IP 属地伪装及多级并发限制策略，保证采集任务的稳定性。
-- **视觉化数据交互**：支持通过**交互式画布**直接点击添加数据点，或一键上传 CSV/Excel 自动导入。
-- **平衡性能与使用**：基于cookie登录,初次使用登录一次即可保存登录状态。根据平台严格程度分别采用网页解析、接口获取等不同策略。
-- **简易可视化设计**：基于streamlit框架搭建交互式网页,操作、配置简单明了,便于快速开始、文件查看处理等。
-- **高级统计分析**：内置 PCA（主成分分析）、因子分析、聚类分析及多种线性/非线性回归模型，助力深度挖掘数据价值。
-- **精美可视化报告**：一键生成词云图、时间分布图、IP 地理分布及情感分析报告。
+- **全平台爬虫矩阵**：深度适配 **B站、抖音、百度贴吧、知乎**，支持多链接并行/顺序采集。
+- **一站式安全分析**：整合情感分析、IP溯源、用户画像、异常检测、风险评估于统一仪表盘。
+- **极致的爬虫风控**：内置自适应请求延迟、IP 属地伪装及多级并发限制策略，保证采集稳定性。
+- **简易可视化设计**：基于 Streamlit 框架搭建交互式网页，操作简单，文件查看处理明了。
+- **精美报告导出**：一键生成词云图、时间分布图、IP 地理分布、情感分析报告，支持 MD/JSON/HTML/TXT 格式导出。
 
 ---
 
@@ -27,124 +22,139 @@ EVDP 是一款以网络爬虫为主，集成化数据处理、分析与采集的
 使用 Git 克隆仓库或直接下载压缩包：
 ```bash
 # HTTPS 克隆
-git clone https://github.com/user/EVDP.git
+git clone https://github.com/EVDP-ORG/EVDP.git
 # 或 SSH 克隆
-git clone git@github.com:user/EVDP.git
+git clone git@github.com:EVDP-ORG/EVDP.git
 ```
 
-### 2. 分平台配置指南
+### 2. 推荐部署方式：Docker（推荐 ✅）
 
-#### 💻 Windows
-1. **环境要求**：Python 3.10+ (建议从 [python.org](https://www.python.org/) 下载)
-2. **依赖安装**：
-   ```powershell
-   python -m venv venv
-   .\venv\Scripts\activate
-   pip install -r requirements.txt
-   playwright install chromium
-   ```
-3. **配置验证**：
-   ```powershell
-   streamlit hello  # 验证 Streamlit 基础环境
-   ```
+#### Windows
+```powershell
+# PowerShell 运行
+.\run.ps1
+```
 
-#### 🍎 macOS
-1. **环境要求**：Python 3.10+ (建议使用 `brew install python@3.10`)
-2. **依赖安装**：
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate
-   pip install -r requirements.txt
-   playwright install chromium
-   ```
-3. **配置验证**：
-   ```bash
-   python3 --version  # 预期输出: Python 3.10.x 或更高
-   ```
+#### Linux / macOS / WSL
+```bash
+# Bash 运行
+bash ./run.sh
+```
 
-#### 🐧 Linux
-1. **环境要求**：Python 3.10+ 及系统库（如 `libnss3` 用于 Playwright）
-2. **依赖安装**：
-   ```bash
-   # 以 Ubuntu 为例安装系统依赖
-   sudo apt-get update && sudo apt-get install -y libnss3 libatk-bridge2.0-0 libxcomposite1
-   python3 -m venv venv
-   source venv/bin/activate
-   pip install -r requirements.txt
-   playwright install chromium
-   ```
-3. **配置验证**：
-   ```bash
-   pip list | grep streamlit  # 预期输出包含 streamlit 版本信息
-   ```
+> **一行命令自动完成**：检测 Docker → 构建镜像 → 启动容器 → 打印访问地址
 
-### 3. 配置与启动流程
+#### 手动 Docker 部署
+```bash
+# 构建镜像
+docker build -t evdp .
 
-0. **说明**：
-   - 为了平衡项目实现逻辑复杂度和用户使用复杂度，B站、贴吧登录状态通粘贴网页版Cookie实现。抖音登录状态通过用户扫码、输入验证码后，监测Cookie并自动写入实现。其中抖音登录可能无法一次成功，此时可再次尝试，有浏览器弹出，正常扫码登录即可。
-   - 所有收集数据，包括爬取到的评论、下载的图片都存放在data文件夹中。
-
-1. **获取身份验证信息 (以 Bilibili 为例)**：
-
-   -  浏览器搜索并登录[bilibili](https://www.bilibili.com/)
-   - 按F12打开开发者模式并切换至"网络'标签
-   - 搜索（没有可以F5刷新）
-   ```text
-   www.bilibili.com
-   ```
-   - 点击第一个，查看标头里Cookie对应字段，将其复制下来，即为启动项目后要粘贴的Cookie。
-
-2. **启动应用**：
-   在项目根目录下运行：
-   ```bash
-   streamlit run app.py
-   ```
-   **预期输出**：
-   ```text
-   Local URL: http://localhost:8501
-   Network URL: http://192.168.x.x:8501
-   ```
-
-### 4. 常见配置错误排查 (FAQ)
-
-| 错误现象 | 可能原因 | 解决方案 |
-| :--- | :--- | :--- |
-| `ModuleNotFoundError` | 虚拟环境未激活 | 重新执行 `activate` 命令并确认终端前缀有 `(venv)` |
-| `Playwright Error` | 浏览器引擎未安装 | 执行 `playwright install chromium` |
-| `Port 8501 busy` | 端口被占用 | 运行 `fuser -k 8501/tcp` (Linux) 或重启应用 |
-| 字体显示乱码 | 系统缺失中文字体 | 确保安装了 `SimHei` 或参考 `core/visualize.py` 配置 |
+# 运行容器
+docker run -d -p 8501:8501 -v ./data:/home/EVDP/data -v ./assets:/home/EVDP/assets evdp
+```
 
 ---
 
-## 🐳 Docker 部署
+### 3. 本地 Python 环境部署
 
-如果你希望在容器中运行：
-```bash
-# 构建镜像
-docker build -t evdp-app .
+如果不想用 Docker，也可以本地安装：
 
-# 运行容器 (映射 8501 端口)
-docker run -p 8501:8501 evdp-app
+#### Windows
+```powershell
+# 创建虚拟环境
+python -m venv venv
+# 激活
+.\venv\Scripts\activate
+# 安装依赖
+pip install -r requirements.txt
+# 安装浏览器
+playwright install chromium
+# 启动
+streamlit run app.py
 ```
+
+#### Linux / macOS
+```bash
+# 创建虚拟环境
+python3 -m venv venv
+# 激活
+source venv/bin/activate
+# 安装依赖
+pip install -r requirements.txt
+# 安装浏览器
+playwright install chromium
+# 启动
+streamlit run app.py
+```
+
+> 💡 脚本版：直接运行 `setup.sh` / `setup.ps1` 可自动完成以上步骤
+
+---
+
+### 4. 配置与登录
+
+#### Cookie 获取（B站、贴吧）
+1. 登录目标平台（bilibili.com / tieba.baidu.com）
+2. 按 F12 打开开发者工具 → 切换到 "网络" 标签
+3. 刷新页面 → 点击第一个请求 → 复制 Request Headers 中的 Cookie
+4. 在对应页面粘贴 Cookie 即可
+
+#### 扫码登录（抖音、知乎）
+- 抖音：弹出二维码窗口，扫码后自动保存 Cookie
+- 知乎：扫码登录，支持匿名/登录模式
+
+> ⚠️ 所有采集数据存放在 `data/` 目录中
 
 ---
 
 ## 📂 项目结构
 ```text
 /EVDP
-├── app.py             # 主入口 (数据处理与拟合)
-├── pages/             # 独立功能页面
-│   ├── bilibili_page.py
-│   ├── douyin_page.py
-│   └── tieba_page.py
-├── core/              # 核心逻辑库
-│   ├── spider/        # 爬虫引擎
-│   └── analysis/      # 统计算法
-├── assets/            # 静态资源 (字体、样式)
-│
-└── data/              # 爬取到的评论
+├── app.py                 # 主入口（主页导航）
+├── pages/                 # 功能页面（Streamlit 自动发现）
+│   ├── 01_bilibili_page   # B站评论采集
+│   ├── 02_douyin_page     # 抖音评论采集
+│   ├── 03_tieba_page      # 贴吧帖子采集
+│   ├── 04_zhihu_page      # 知乎回答采集
+│   ├── 05_file_page       # 文件管理
+│   ├── 06_security_dashboard  # 舆情安全分析（核心）
+│   ├── 07_sentiment_analysis   # 情感分析
+│   └── 08_data_cleaning       # 数据清洗
+├── core/                  # 核心逻辑库
+│   ├── spider/            # 爬虫引擎
+│   ├── analysis/          # 统计分析
+│   └── security/          # 安全分析模块
+├── assets/                # 静态资源（字体、词库、敏感词）
+├── data/                  # 采集数据存储
+├── run.sh / run.ps1       # Docker 一键启动脚本
+├── setup.sh / setup.ps1   # 本地环境安装脚本
+├── Dockerfile             # 容器构建文件
+└── requirements.txt       # Python 依赖
 ```
-## 效果展示
+
+---
+
+## 📊 功能概览
+
+| 模块 | 功能描述 |
+|------|----------|
+| 数据采集 | 支持 B站、抖音、贴吧、知乎四平台评论/帖子采集 |
+| 数据清洗 | 去重、去噪、格式标准化处理 |
+| 情感分析 | 正面/负面/中立评论识别，批量处理 |
+| IP溯源 | 评论地域分布、基尼系数分析 |
+| 用户画像 | 可疑账号识别、机器人检测 |
+| 异常检测 | 发现异常行为模式 |
+| 风险评估 | 综合评分与风险等级判定 |
+| 报告导出 | Markdown / JSON / HTML / TXT 四种格式 |
+
+---
+## 界面展示
+#### 主界面
+<div align="center">
+  <img src="https://github.com/hxhdhcjmet/blogimage/blob/main/%E4%B8%BB%E7%95%8C%E9%9D%A2.png?raw=true" width="600">
+</div>
+
+
+
 #### 文本查看
 <div align="center">
   <img src="https://github.com/hxhdhcjmet/blogimage/blob/main/comment.png?raw=true" width="600">
@@ -160,14 +170,25 @@ docker run -p 8501:8501 evdp-app
   <img src="https://raw.githubusercontent.com/hxhdhcjmet/blogimage/bd2766e6ea4b5690fd2be08f96f4e7c9c318f215/image_download.png" width="600">
 </div>
 
+## 🔧 常见问题排查
+
+| 错误现象 | 可能原因 | 解决方案 |
+| :--- | :--- | :--- |
+| `ModuleNotFoundError` | 虚拟环境未激活 | 重新执行 `activate` 并确认终端前缀有 `(venv)` |
+| `Playwright Error` | 浏览器未安装 | 执行 `playwright install chromium` |
+| `Port 8501 busy` | 端口被占用 | Linux: `fuser -k 8501/tcp`，Windows: 检查端口占用 |
+| 字体显示乱码 | 缺少中文字体 | 确保 `assets/fonts/` 目录包含 `simhei.ttf` |
+| Docker 构建失败 | 网络问题或权限 | 检查 Docker Desktop 是否启动，确保已开启 2375 端口 |
+
 ---
 
 ## 📝 后续开发计划
 
--  1.增加更多主流平台(如知乎、微博、小红书等)的爬虫，获取更丰富的信息
--  2.进一步增加风控能力(开发线程池,提高防封能力,同时提高并发数量,加快爬取速度)
-- 3.增加更有用、更深入的数据分析模块。
+- 增加更多主流平台（如微博、小红书）爬虫
+- 开发线程池提高防封能力与并发速度
+- 增加更多深度数据分析模块
 - ...
+
 ---
 
 ## ⚠️ 免责声明
