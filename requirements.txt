@@ -1,70 +1,81 @@
-aiofiles
-aiohappyeyeballs
-aiohttp
-aiosignal
-altair
-async-timeout
-attrs
-beautifulsoup4
-blinker
-bs4
-cachetools
-certifi
-charset-normalizer
-click
-contourpy
-cycler
-fonttools
-frozenlist
-gitdb
-GitPython
-greenlet
-idna
-jieba
-Jinja2
-joblib
-jsonschema
-jsonschema-specifications
-kiwisolver
-MarkupSafe
-matplotlib
-multidict
-narwhals
-numpy
-packaging
+# EVDP 舆情安全分析平台 - Python 依赖
+# 兼容 Docker 构建，本地 pip install -r requirements.txt 可直接使用
+# 所有包均不指定版本，由 pip 自动选择兼容版本
+
+# ── Web 框架 ──────────────────────────────────────────────
+streamlit
+
+# ── 数据处理 ──────────────────────────────────────────────
 pandas
-pillow
-playwright==1.49.0
-propcache
-protobuf
-pyarrow
+numpy
+scipy
+scikit-learn
+joblib
+threadpoolctl
+
+# ── 可视化 ────────────────────────────────────────────────
+matplotlib
+seaborn
+plotly
+altair
 pydeck
-pyee
-pyparsing
-python-dateutil
-pytz
+wordcloud
+pillow
+
+# ── 中文分词与 NLP ─────────────────────────────────────────
+jieba
+snownlp
+
+# ── 爬虫与网络 ─────────────────────────────────────────────
+requests
+aiohttp
+aiofiles
+beautifulsoup4
+bs4
+
+# ── 浏览器自动化（必须用 playwright==1.49.0）──────────────
+playwright==1.49.0
+
+# ── 异步支持 ───────────────────────────────────────────────
+aiohappyeyeballs
+aiosignal
+async-timeout
+greenlet
+frozenlist
+multidict
+yarl
+propcache
+
+# ── Streamlit 扩展 ─────────────────────────────────────────
+streamlit-drawable-canvas
+
+# ── 二维码与图像 ───────────────────────────────────────────
 pyzbar
 qrcode
-referencing
-requests
-rpds-py
-scikit-learn
-scipy
-seaborn
-six
-smmap
-snownlp
-soupsieve
-streamlit
-streamlit-drawable-canvas
-tenacity
-threadpoolctl
-toml
-tornado
+
+# ── 其他工具 ──────────────────────────────────────────────
 tqdm
-typing_extensions
-tzdata
+tenacity
+gitpython
+click
+jinja2
+fonttools
+packaging
+python-dateutil
+pytz
 urllib3
+certifi
+charset-normalizer
+idna
+pyparsing
+toml
+typing-extensions
+tzdata
+cachetools
+protobuf
+rpds-py
+cycler
+kiwisolver
+contourpy
+narwhals
 watchdog
-wordcloud
-yarl

@@ -80,7 +80,7 @@ with st.sidebar:
         index=0,
         key="theme_mode_select"
     )
-    
+
     # 保存主题偏好
     if theme_mode != st.session_state.get("last_theme", "跟随系统"):
         st.session_state["last_theme"] = theme_mode
@@ -195,7 +195,7 @@ with proc_col1:
 - 预览JSONL数据内容
 - 删除/导出数据文件
 
-**数据清洗** <span class="module-name">07_data_cleaning</span>
+**数据清洗** <span class="module-name">08_data_cleaning</span>
 
 - 去除重复评论
 - 过滤无效内容
@@ -204,13 +204,7 @@ with proc_col1:
 
 with proc_col2:
     st.markdown("""
-**数据可视化** <span class="module-name">06_visualize</span>
-
-- 图表展示数据分布
-- 支持多种图表类型
-- 导出高质量图片
-
-**情感分析** <span class="module-name">08_sentiment_analysis</span>
+**情感分析** <span class="module-name">07_sentiment_analysis</span>
 
 - 分析评论情感倾向（正面/负面/中立）
 - 批量处理大量评论
@@ -225,7 +219,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown("""
-**舆情安全分析仪表盘** <span class="module-name">09_security_dashboard</span>
+**舆情安全分析仪表盘** <span class="module-name">06_security_dashboard</span>
 
 **这是一站式完整分析入口，整合了以下所有分析功能：**
 
@@ -257,7 +251,7 @@ with tip_col1:
     st.info("""
     **首次使用建议：**
     1. 先从 `01_bilibili_page` 或 `03_tieba_page` 获取数据
-    2. 然后打开 `09_security_dashboard` 进行分析
+    2. 然后打开 `06_security_dashboard` 进行分析
     3. 最后导出报告查看结果
     """)
 
