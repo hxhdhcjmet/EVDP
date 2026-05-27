@@ -1,8 +1,9 @@
 # 基础配置
 import os
+from core.paths import DATA_DIR as PROJECT_DATA_DIR
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(BASE_DIR))),"data")
+DATA_DIR = str(PROJECT_DATA_DIR)
 COOKIE_PATH = os.path.join(BASE_DIR, "cookies", "zhihu_cookie.json")
 
 os.makedirs(os.path.dirname(COOKIE_PATH), exist_ok=True)

@@ -1,9 +1,10 @@
 # 配置路径、访问头
 import os
+from core.paths import DATA_DIR as PROJECT_DATA_DIR
 
 # 基础路径配置
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(BASE_DIR))),"data")
+DATA_DIR = str(PROJECT_DATA_DIR)
 COOKIE_PATH = os.path.join(BASE_DIR, "cookies", "tieba_cookie.json")
 # 确保目录存在
 os.makedirs(os.path.join(BASE_DIR, "cookies"), exist_ok=True)
