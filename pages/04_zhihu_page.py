@@ -8,6 +8,8 @@ from core.spider.zhihu.zhihu_login import CookieManager
 from core.spider.zhihu.zhihu_scraped import ZhihuCrawler
 from core.spider.zhihu.zhihu_writer import Writer
 
+st.set_page_config(page_title="知乎评论自动采集", page_icon="💡", layout="wide")
+
 def extract_id_from_url(url):
     """从知乎链接中提取ID作为文件夹名"""
     # 处理回答链接: https://www.zhihu.com/question/622014984/answer/89542115195
@@ -75,7 +77,6 @@ async def run_crawler_task(urls, crawl_content, status_placeholder, progress_bar
         status_placeholder.success("✅ 所有任务已完成！")
 
 def render_zhihu_page():
-    st.set_page_config(page_title="知乎评论自动采集", page_icon="💡", layout="wide")
     st.title("💡 知乎回答/问题评论自动采集")
 
     # ------ 侧边栏：账户配置 ------

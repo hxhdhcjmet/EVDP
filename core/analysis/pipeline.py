@@ -78,7 +78,14 @@ class SecurityPipeline:
         report = pipeline.run("/path/to/data.jsonl")
     """
 
-    def __init__(self, risk_threshold: int = 60, analysis_limit: int = None):
+    def __init__(self,
+                 risk_threshold: int = 60,
+                 analysis_limit: int = None,
+                 enable_ip: bool = True,
+                 enable_user: bool = True,
+                 enable_anomaly: bool = True,
+                 cleaner_options: Optional[Dict] = None,
+                 sentiment_options: Optional[Dict] = None):
         """
         Args:
             risk_threshold: 高风险评论判定阈值
@@ -86,17 +93,24 @@ class SecurityPipeline:
         """
         self.risk_threshold = risk_threshold
         self.analysis_limit = analysis_limit
+        self.enable_ip = enable_ip
+        self.enable_user = enable_user
+        self.enable_anomaly = enable_anomaly
 
         # 延迟导入，避免循环依赖
         from core.analysis.data_cleaner import DataCleaner
         from core.analysis.sentiment_analyzer import SentimentAnalyzer
         from core.analysis.ip_analyzer import IPAnalyzer
         from core.analysis.user_profiler import UserProfiler
+        from core.security.anomaly_detector import AnomalyDetector
 
-        self.cleaner = DataCleaner()
-        self.sentiment = SentimentAnalyzer()
+        self.cleaner = DataCleaner(**(cleaner_options or {}))
+        sentiment_config = {"risk_threshold": risk_threshold}
+        sentiment_config.update(sentiment_options or {})
+        self.sentiment = SentimentAnalyzer(**sentiment_config)
         self.ip_analyzer = IPAnalyzer()
         self.user_profiler = UserProfiler()
+        self.anomaly_detector = AnomalyDetector()
 
     def run(self, file_path: str, progress_callback=None) -> PipelineReport:
         """
@@ -121,6 +135,7 @@ class SecurityPipeline:
 
         # ── Step 1: 数据清洗 ──────────────────────────────────────────
         _progress(1, "数据清洗与标准化...")
+        sentiment_results = []
         try:
             comments = self.cleaner.clean_file(file_path)
             report.cleaning_report = self.cleaner.get_report()
@@ -149,7 +164,14 @@ class SecurityPipeline:
                 sample = comment_dicts[:self.analysis_limit]
             sentiment_results = self.sentiment.analyze_batch(sample)
             report.sentiment_distribution = self.sentiment.get_distribution(sentiment_results)
-            report.high_risk_comments = report.sentiment_distribution.get("high_risk", 0)
+            report.high_risk_comments = sum(
+                1 for r in sentiment_results if r.risk_score >= self.risk_threshold
+            )
+            report.sentiment_distribution["high_risk"] = report.high_risk_comments
+            total_sentiment = report.sentiment_distribution.get("total", 0)
+            report.sentiment_distribution["high_risk_ratio"] = (
+                report.high_risk_comments / total_sentiment if total_sentiment else 0
+            )
 
             # 将情感结果回写到 comment_dicts（供后续使用）
             sentiment_map = {r.comment_id: r for r in sentiment_results}
@@ -164,21 +186,42 @@ class SecurityPipeline:
 
         # ── Step 3: IP 地域溯源 ───────────────────────────────────────
         _progress(3, "IP 地域溯源分析...")
-        try:
-            report.ip_result = self.ip_analyzer.analyze(comment_dicts)
-        except Exception as e:
-            logger.warning(f"IP 分析失败: {e}")
+        if self.enable_ip:
+            try:
+                report.ip_result = self.ip_analyzer.analyze(comment_dicts)
+            except Exception as e:
+                logger.warning(f"IP 分析失败: {e}")
+        else:
+            report.key_findings.append("已按配置跳过 IP 地域分析")
 
         # ── Step 4: 用户行为画像 ──────────────────────────────────────
-        _progress(4, "用户行为画像分析...")
-        try:
-            report.user_profiling = self.user_profiler.analyze(comment_dicts)
-            report.suspicious_users = sum(
-                len(pr.suspicious_users)
-                for pr in report.user_profiling.values()
-            )
-        except Exception as e:
-            logger.warning(f"用户画像失败: {e}")
+        _progress(4, "用户行为画像与异常检测...")
+        if self.enable_user:
+            try:
+                report.user_profiling = self.user_profiler.analyze(comment_dicts)
+                report.suspicious_users = sum(
+                    len(pr.suspicious_users)
+                    for pr in report.user_profiling.values()
+                )
+            except Exception as e:
+                logger.warning(f"用户画像失败: {e}")
+        else:
+            report.key_findings.append("已按配置跳过用户画像分析")
+
+        if self.enable_anomaly:
+            try:
+                sentiment_dicts = [
+                    {
+                        "sentiment": r.sentiment,
+                        "risk_score": r.risk_score,
+                    }
+                    for r in sentiment_results
+                ]
+                report.anomalies = self.anomaly_detector.detect(comment_dicts, sentiment_dicts)
+            except Exception as e:
+                logger.warning(f"异常检测失败: {e}")
+        else:
+            report.key_findings.append("已按配置跳过异常检测")
 
         # 综合评分
         report.overall_score, report.overall_level, report.score_breakdown = (
@@ -200,7 +243,8 @@ class SecurityPipeline:
         权重分配:
           情感风险    40%
           IP 地域     30%
-          用户画像    30%
+          用户画像    20%
+          异常检测    20%
         """
         breakdown = {}
 
@@ -235,19 +279,35 @@ class SecurityPipeline:
                 user_score = int(sum(all_scores) / len(all_scores))
         breakdown["user"] = user_score
 
+        anomaly_score = 0
+        if r.anomalies:
+            severity_weight = {"critical": 100, "high": 75, "medium": 45, "low": 20}
+            weighted = [
+                max(a.score, severity_weight.get(a.severity, 0))
+                for a in r.anomalies
+            ]
+            anomaly_score = min(int(sum(weighted[:5]) / min(len(weighted), 5)), 100)
+        breakdown["anomaly"] = anomaly_score
+
         # 加权总分
-        # 若 IP 数据不足，将其权重分配给其他维度
+        weights = {
+            "sentiment": 0.35,
+            "ip": 0.25,
+            "user": 0.20,
+            "anomaly": 0.20,
+        }
+        active_weights = weights.copy()
         if r.ip_result and not r.ip_result.has_sufficient_ip:
-            total = int(
-                breakdown["sentiment"] * 0.50 +
-                breakdown["user"] * 0.50
-            )
-        else:
-            total = int(
-                breakdown["sentiment"] * 0.40 +
-                breakdown["ip"] * 0.30 +
-                breakdown["user"] * 0.30
-            )
+            active_weights.pop("ip", None)
+        if not r.user_profiling:
+            active_weights.pop("user", None)
+        if not r.anomalies:
+            active_weights.pop("anomaly", None)
+
+        weight_total = sum(active_weights.values()) or 1
+        total = int(
+            sum(breakdown[k] * w for k, w in active_weights.items()) / weight_total
+        )
 
         total = min(total, 100)
 
@@ -259,9 +319,6 @@ class SecurityPipeline:
             level = "medium"
         else:
             level = "low"
-
-        # 异常检测分（如果可用）
-        breakdown["anomaly"] = 0
 
         return total, level, breakdown
 
@@ -289,6 +346,10 @@ class SecurityPipeline:
         for pr in r.user_profiling.values():
             findings.extend(pr.findings)
 
+        # 异常检测
+        for anomaly in r.anomalies[:5]:
+            findings.append(f"{anomaly.description}（{anomaly.severity}）")
+
         return findings[:15]  # 最多15条
 
     def _generate_recommendations(self, r: PipelineReport) -> List[str]:
@@ -305,6 +366,9 @@ class SecurityPipeline:
 
         if r.high_risk_comments > 10:
             recs.append("高风险评论数量较多，建议扩大敏感词库覆盖范围")
+
+        if any(a.severity in ("high", "critical") for a in r.anomalies):
+            recs.append("检测到高等级异常，建议结合发布时间、账号和重复内容进行人工复核")
 
         if not recs:
             recs.append("当前数据风险较低，保持常规监测即可")

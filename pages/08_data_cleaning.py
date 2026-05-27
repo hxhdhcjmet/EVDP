@@ -6,16 +6,13 @@
 import streamlit as st
 import pandas as pd
 from pathlib import Path
-import sys
-import os
 from datetime import datetime
 
-# 添加项目路径
-sys.path.insert(0, '/home/EVDP')
-
 from core.analysis import DataCleaner, clean_file
+from core.paths import DATA_DIR, UPLOAD_DIR, ensure_runtime_dirs
 
 # 页面配置
+ensure_runtime_dirs()
 st.set_page_config(
     page_title="数据清洗与标准化",
     layout="wide",
@@ -97,7 +94,7 @@ def render_data_cleaning_page():
         st.markdown("**方式 1: 从已有数据选择**")
         
         # 扫描 data 目录
-        data_dir = Path('/home/EVDP/data')
+        data_dir = DATA_DIR
         if data_dir.exists():
             jsonl_files = list(data_dir.rglob('*.jsonl'))
             
@@ -106,7 +103,7 @@ def render_data_cleaning_page():
                 selected_file = st.selectbox(
                     "选择数据文件",
                     file_options,
-                    format_func=lambda x: x.split('/data/')[-1] if '/data/' in x else x
+                    format_func=lambda x: str(Path(x).relative_to(DATA_DIR))
                 )
                 
                 # 显示文件信息
@@ -160,10 +157,10 @@ def render_data_cleaning_page():
             data_source = None
             if uploaded_file:
                 # 保存上传的文件
-                temp_path = f"/tmp/{uploaded_file.name}"
+                temp_path = UPLOAD_DIR / uploaded_file.name
                 with open(temp_path, 'wb') as f:
                     f.write(uploaded_file.getbuffer())
-                data_source = temp_path
+                data_source = str(temp_path)
             elif selected_file:
                 data_source = selected_file
             
@@ -173,6 +170,14 @@ def render_data_cleaning_page():
                 # 执行清洗
                 with st.spinner("正在清洗数据..."):
                     try:
+                        st.session_state.cleaner = DataCleaner(
+                            remove_html=remove_html,
+                            mark_url=mark_url,
+                            mark_mention=mark_mention,
+                            normalize_emoji=normalize_emoji,
+                            flatten_replies=flatten_replies,
+                            keep_raw_data=show_raw_data
+                        )
                         comments = st.session_state.cleaner.clean_file(data_source)
                         report = st.session_state.cleaner.get_report()
                         

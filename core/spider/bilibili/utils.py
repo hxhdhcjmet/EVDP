@@ -1,6 +1,7 @@
 # 针对bilibili评论爬取的工具类
 from datetime import datetime
 import os
+from core.paths import DATA_DIR
 
 
 def default_filename():
@@ -16,15 +17,7 @@ def get_data_path(dir_name:str='data',filename:str=None):
     """
     找到保存文件夹路径、文件夹名和文件名
     """
-    #保存到与app.py同级的data文件夹内
-    curr_file_path = os.path.abspath(__file__)
-    curr_dir = os.path.dirname(curr_file_path)
-
-    parent1 = os.path.dirname(curr_dir)
-    parent2 = os.path.dirname(parent1)
-    parent3 = os.path.dirname(parent2)
-
-    data_dir = os.path.join(parent3,dir_name) #创建data文件夹
+    data_dir = str(DATA_DIR if dir_name == 'data' else DATA_DIR.parent / dir_name)
 
     # 创建data文件夹（不存在时）
     os.makedirs(data_dir,exist_ok=True)

@@ -227,7 +227,10 @@ class SentimentAnalyzer:
     
     def __init__(self,
                  use_snownlp: bool = True,
-                 assets_dir: str = None):
+                 assets_dir: str = None,
+                 enable_sensitive: bool = True,
+                 enable_keywords: bool = True,
+                 risk_threshold: int = 60):
         """
         初始化
         
@@ -236,6 +239,9 @@ class SentimentAnalyzer:
             assets_dir: assets 目录路径
         """
         self.use_snownlp = use_snownlp
+        self.enable_sensitive = enable_sensitive
+        self.enable_keywords = enable_keywords
+        self.risk_threshold = risk_threshold
         
         # 加载 SnowNLP
         if use_snownlp:
@@ -287,7 +293,10 @@ class SentimentAnalyzer:
         self.stats[sentiment] += 1
         
         # 2. 敏感词检测
-        sensitive_words, categories = self.sensitive_loader.detect(content)
+        if self.enable_sensitive:
+            sensitive_words, categories = self.sensitive_loader.detect(content)
+        else:
+            sensitive_words, categories = [], []
         
         if sensitive_words:
             self.stats['with_sensitive'] += 1
@@ -298,7 +307,7 @@ class SentimentAnalyzer:
         )
         
         # 4. 关键词提取
-        keywords = self._extract_keywords(content)
+        keywords = self._extract_keywords(content) if self.enable_keywords else []
         
         return SentimentResult(
             comment_id=comment_id,
@@ -524,7 +533,7 @@ class SentimentAnalyzer:
         neutral = sum(1 for r in results if r.sentiment == 'neutral')
         
         with_sensitive = sum(1 for r in results if r.sensitive_count > 0)
-        high_risk = sum(1 for r in results if r.risk_score >= 60)
+        high_risk = sum(1 for r in results if r.risk_score >= self.risk_threshold)
         
         avg_sentiment_score = sum(r.sentiment_score for r in results) / total
         avg_risk_score = sum(r.risk_score for r in results) / total

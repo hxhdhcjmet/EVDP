@@ -37,7 +37,17 @@ class ContentCleaner:
     MULTI_SPACE_PATTERN = re.compile(r'\s+')
     MULTI_NEWLINE_PATTERN = re.compile(r'\n+')
     
-    def __init__(self):
+    def __init__(self,
+                 remove_html: bool = True,
+                 mark_url: bool = True,
+                 mark_mention: bool = True,
+                 normalize_emoji: bool = True,
+                 keep_raw_data: bool = True):
+        self.remove_html = remove_html
+        self.mark_url = mark_url
+        self.mark_mention = mark_mention
+        self.normalize_emoji = normalize_emoji
+        self.keep_raw_data = keep_raw_data
         self.stats = {
             'html_removed': 0,
             'url_marked': 0,
@@ -68,26 +78,30 @@ class ContentCleaner:
         }
         
         # 1. 去除HTML标签
-        content, count = self._remove_html(content)
-        self.stats['html_removed'] += count
+        if self.remove_html:
+            content, count = self._remove_html(content)
+            self.stats['html_removed'] += count
         
         # 2. 标记URL
         urls = self.URL_PATTERN.findall(content)
         metadata['url_count'] = len(urls)
         metadata['has_url'] = len(urls) > 0
-        self.stats['url_marked'] += len(urls)
+        if self.mark_url:
+            self.stats['url_marked'] += len(urls)
         
         # 3. 标记@提及
         mentions = self.MENTION_PATTERN.findall(content)
         metadata['mention_count'] = len(mentions)
         metadata['has_mention'] = len(mentions) > 0
-        self.stats['mention_marked'] += len(mentions)
+        if self.mark_mention:
+            self.stats['mention_marked'] += len(mentions)
         
         # 4. 标准化表情符号 [doge] 等
         emojis = self.EMOJI_PATTERN.findall(content)
         metadata['emoji_count'] = len(emojis)
         metadata['has_emoji'] = len(emojis) > 0
-        self.stats['emoji_normalized'] += len(emojis)
+        if self.normalize_emoji:
+            self.stats['emoji_normalized'] += len(emojis)
         
         # 5. 标准化空白字符
         content = self.MULTI_SPACE_PATTERN.sub(' ', content)
@@ -120,7 +134,13 @@ class ContentCleaner:
     
     def get_stats(self) -> Dict:
         """获取清洗统计"""
-        return self.stats.copy()
+        stats = self.stats.copy()
+        stats['remove_html_enabled'] = self.remove_html
+        stats['mark_url_enabled'] = self.mark_url
+        stats['mark_mention_enabled'] = self.mark_mention
+        stats['normalize_emoji_enabled'] = self.normalize_emoji
+        stats['keep_raw_data_enabled'] = self.keep_raw_data
+        return stats
 
 
 class PlatformParser:
@@ -320,7 +340,13 @@ class DataCleaner:
     
     def __init__(self, 
                  chunk_size: int = 1000,
-                 enable_stats: bool = True):
+                 enable_stats: bool = True,
+                 remove_html: bool = True,
+                 mark_url: bool = True,
+                 mark_mention: bool = True,
+                 normalize_emoji: bool = True,
+                 flatten_replies: bool = True,
+                 keep_raw_data: bool = True):
         """
         初始化
         
@@ -330,9 +356,18 @@ class DataCleaner:
         """
         self.chunk_size = chunk_size
         self.enable_stats = enable_stats
+        self.flatten_replies = flatten_replies
+        self.keep_raw_data = keep_raw_data
         
         # 初始化组件
-        self.content_cleaner = ContentCleaner()
+        self.cleaner_options = {
+            "remove_html": remove_html,
+            "mark_url": mark_url,
+            "mark_mention": mark_mention,
+            "normalize_emoji": normalize_emoji,
+            "keep_raw_data": keep_raw_data,
+        }
+        self.content_cleaner = ContentCleaner(**self.cleaner_options)
         
         # 平台解析器
         self.parsers = {
@@ -390,6 +425,11 @@ class DataCleaner:
                     
                     # 解析并清洗
                     parsed = parser.parse(raw_data, self.content_cleaner)
+                    if not self.flatten_replies:
+                        parsed = [c for c in parsed if not c.is_reply]
+                    if not self.keep_raw_data:
+                        for comment in parsed:
+                            comment.raw_data = None
                     comments.extend(parsed)
                     self.report.total_cleaned += len(parsed)
                     
@@ -536,7 +576,7 @@ class DataCleaner:
     def reset_stats(self):
         """重置统计"""
         self.report = CleaningReport()
-        self.content_cleaner = ContentCleaner()
+        self.content_cleaner = ContentCleaner(**self.cleaner_options)
 
 
 # 便捷函数

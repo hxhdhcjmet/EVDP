@@ -78,7 +78,15 @@ class ReportGenerator:
     def _anomalies(self):
         a = getattr(self.report, 'anomalies', None)
         if not a: return []
-        return [{'type': x.type, 'severity': x.severity, 'desc': x.description, 'count': x.affected_count} for x in a[:10]]
+        return [
+            {
+                'type': getattr(x, 'anomaly_type', getattr(x, 'type', 'unknown')),
+                'severity': x.severity,
+                'desc': x.description,
+                'count': x.affected_count
+            }
+            for x in a[:10]
+        ]
 
     def _findings(self):
         f = getattr(self.report, 'key_findings', None)

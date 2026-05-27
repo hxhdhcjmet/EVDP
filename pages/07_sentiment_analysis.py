@@ -9,16 +9,13 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from pathlib import Path
-import sys
-import os
 from datetime import datetime
 
-# 添加项目路径
-sys.path.insert(0, '/home/EVDP')
-
 from core.analysis import SentimentAnalyzer, DataCleaner
+from core.paths import DATA_DIR, ensure_runtime_dirs
 
 # 页面配置
+ensure_runtime_dirs()
 st.set_page_config(
     page_title="情感分析与风险评估",
     layout="wide",
@@ -89,7 +86,7 @@ def render_sentiment_analysis_page():
                 st.warning("⚠️ 未找到清洗数据，请先进行数据清洗")
         else:
             # 选择新文件
-            data_dir = Path('/home/EVDP/data')
+            data_dir = DATA_DIR
             if data_dir.exists():
                 jsonl_files = list(data_dir.rglob('*.jsonl'))
                 
@@ -98,8 +95,13 @@ def render_sentiment_analysis_page():
                     selected_file = st.selectbox(
                         "选择数据文件",
                         file_options,
-                        format_func=lambda x: x.split('/data/')[-1] if '/data/' in x else x
+                        format_func=lambda x: str(Path(x).relative_to(DATA_DIR))
                     )
+                else:
+                    selected_file = None
+                    st.warning("未找到数据文件")
+            else:
+                selected_file = None
     
     # ========== 步骤 2: 分析配置 ==========
     st.markdown('<p class="step-header">⚙️ 步骤 2: 分析配置</p>', unsafe_allow_html=True)
@@ -164,6 +166,11 @@ def render_sentiment_analysis_page():
                         ]
                         
                         # 执行分析
+                        st.session_state.analyzer = SentimentAnalyzer(
+                            enable_sensitive=enable_sensitive,
+                            enable_keywords=enable_keywords,
+                            risk_threshold=risk_threshold
+                        )
                         results = st.session_state.analyzer.analyze_batch(comment_dicts)
                         
                         # 获取分布统计

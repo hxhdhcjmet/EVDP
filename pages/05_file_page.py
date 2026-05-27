@@ -5,15 +5,14 @@ import shutil
 import pandas as pd
 from pathlib import Path
 from PIL import Image
+from core.paths import DATA_DIR, ensure_runtime_dirs
 
 # --- 配置区 ---
-TARGET_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),'data')
+ensure_runtime_dirs()
+TARGET_DIR = DATA_DIR
 SUPPORTED_EXTENSIONS = {".jsonl", ".json", ".png", ".jpg", ".jpeg", ".gif"}
 
-if not os.path.exists(TARGET_DIR):
-    os.makedirs(TARGET_DIR)
-
-st.set_page_config(page_title="树状文件管理器", layout="wide")
+st.set_page_config(page_title="数据文件管理", layout="wide", page_icon="📂")
 
 #  1. 缓存：扫描目录结构
 @st.cache_data
@@ -25,7 +24,7 @@ def get_directory_tree(root_path):
             if item.is_dir():
                 sub_tree = get_directory_tree(item)
                 tree["subfolders"][item.name] = sub_tree
-            elif item.is_file():
+            elif item.is_file() and item.suffix.lower() in SUPPORTED_EXTENSIONS:
                 tree["files"].append(item.name)
     except Exception as e:
         st.error(f"扫描出错: {e}")
@@ -67,8 +66,7 @@ def render_tree_ui(tree_data, current_path):
                 and st.session_state.get("selected_type") == "folder"
             )
             folder_label = f"📁 {folder_name}" if not is_selected_folder else f"🎯 **{folder_name}**"
-            # 【修改点】 use_container_width=True -> width='stretch'
-            if st.button(folder_label, key=f"folder::{full_folder_path}", width='stretch'):
+            if st.button(folder_label, key=f"folder::{full_folder_path}", use_container_width=True):
                 st.session_state.selected_path = full_folder_path
                 st.session_state.selected_type = "folder"
                 st.rerun()
@@ -85,8 +83,7 @@ def render_tree_ui(tree_data, current_path):
         )
         label = f"📄 {f_name}" if not is_selected else f"🎯 **{f_name}**"
         
-        # 【修改点】 use_container_width=True -> width='stretch'
-        if st.button(label, key=full_f_path, width='stretch'):
+        if st.button(label, key=full_f_path, use_container_width=True):
             st.session_state.selected_path = full_f_path
             st.session_state.selected_type = "file"
             st.rerun()
@@ -168,8 +165,8 @@ if "selected_type" not in st.session_state:
 # 侧边栏构建
 with st.sidebar:
     st.title("📂 目录管理")
-    # 【修改点】 use_container_width=True -> width='stretch'
-    if st.button("🔄 刷新磁盘列表", width='stretch'):
+    st.caption("仅显示 JSON/JSONL 与图片文件")
+    if st.button("🔄 刷新磁盘列表", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
     
@@ -179,7 +176,7 @@ with st.sidebar:
     render_tree_ui(dir_tree, Path(TARGET_DIR))
 
 # 主界面显示预览
-st.title("🖼️ 内容预览")
+st.title("📂 数据文件管理")
 
 active_path = st.session_state.selected_path
 active_type = st.session_state.selected_type
@@ -189,35 +186,29 @@ if active_path and os.path.exists(active_path):
     # 顶部工具栏
     col_path, col_actions = st.columns([4, 2])
     with col_path:
-        st.text(f"📍 路径: {f_path.relative_to(Path(TARGET_DIR).parent)}")
+        st.text(f"📍 路径: {f_path.relative_to(TARGET_DIR.parent)}")
     with col_actions:
         if active_type == "file":
-            # 【修改点】 Popover 也使用 width='stretch' (如果支持的话，若报错可改回 use_container_width 或移除)
-            # 注意：st.popover 在某些版本可能没有 width 参数，如果报错请将下面这行改回 use_container_width=True
-            with st.popover("🗑️ 删除文件", width='stretch'):
+            with st.popover("🗑️ 删除文件"):
                 st.error("确定要删除吗？")
-                # 【修改点】 use_container_width=True -> width='stretch'
-                if st.button("确认删除", type="primary", width='stretch'):
+                if st.button("确认删除", type="primary", use_container_width=True):
                     if handle_delete_file(active_path):
                         st.rerun()
-            with st.popover("✏️ 重命名文件", width='stretch'):
+            with st.popover("✏️ 重命名文件"):
                 base_name = f_path.stem
                 new_name = st.text_input("新名称（不含后缀）", value=base_name, key=f"rename_file_{active_path}")
-                # 【修改点】 use_container_width=True -> width='stretch'
-                if st.button("确认重命名", type="primary", width='stretch'):
+                if st.button("确认重命名", type="primary", use_container_width=True):
                     if handle_rename_file(active_path, new_name):
                         st.rerun()
         elif active_type == "folder":
-            with st.popover("🗑️ 删除文件夹", width='stretch'):
+            with st.popover("🗑️ 删除文件夹"):
                 st.error(f"是否删除{f_path.name}文件夹")
-                # 【修改点】 use_container_width=True -> width='stretch'
-                if st.button("确认删除", type="primary", width='stretch'):
+                if st.button("确认删除", type="primary", use_container_width=True):
                     if handle_delete_folder(active_path):
                         st.rerun()
-            with st.popover("✏️ 重命名文件夹", width='stretch'):
+            with st.popover("✏️ 重命名文件夹"):
                 new_name = st.text_input("新名称", value=f_path.name, key=f"rename_folder_{active_path}")
-                # 【修改点】 use_container_width=True -> width='stretch'
-                if st.button("确认重命名", type="primary", width='stretch'):
+                if st.button("确认重命名", type="primary", use_container_width=True):
                     if handle_rename_path(active_path, new_name):
                         st.rerun()
 
@@ -228,16 +219,13 @@ if active_path and os.path.exists(active_path):
         # 根据后缀名预览
         try:
             if f_path.suffix.lower() in {".png", ".jpg", ".jpeg", ".gif"}:
-                # 【修改点】 use_container_width=True -> width='stretch'
-                st.image(load_image_cached(f_path, mtime), width='stretch')
+                st.image(load_image_cached(f_path, mtime), use_container_width=True)
             elif f_path.suffix.lower() == ".jsonl":
                 df = load_jsonl_cached(f_path, mtime)
-                # 【修改点】 use_container_width=True -> width='stretch'
-                st.dataframe(df, width='stretch', height=700)
+                st.dataframe(df, use_container_width=True, height=700)
             elif f_path.suffix.lower() == ".json":
                 df = load_json_cached(f_path, mtime)
-                # 【修改点】 use_container_width=True -> width='stretch'
-                st.dataframe(df, width='stretch', height=700)
+                st.dataframe(df, use_container_width=True, height=700)
             else:
                 st.info("该文件类型不支持预览。")
         except Exception as e:
