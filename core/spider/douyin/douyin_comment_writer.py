@@ -3,6 +3,7 @@ import aiofiles
 import json
 import datetime
 import os
+from core.paths import DATA_DIR
 
 
 class CommentWriter:
@@ -12,14 +13,7 @@ class CommentWriter:
         if not filename:
             filename = self._default_name_()
 
-        #保存到与app.py同级的data文件夹内
-        curr_file_path = os.path.abspath(__file__)
-        curr_dir = os.path.dirname(curr_file_path)
-        
-        parent1 = os.path.dirname(curr_dir)
-        parent2 = os.path.dirname(parent1)
-        parent3 = os.path.dirname(parent2)
-        data_dir = os.path.join(parent3,"data")
+        data_dir = str(DATA_DIR)
 
         # 创建data文件夹
         os.makedirs(data_dir,exist_ok=True)
@@ -33,9 +27,10 @@ class CommentWriter:
         self.file = None
         print(f"文件保存至:{self.filepath}")
     
+    @staticmethod
     def _default_name_():
         # 默认时间为文件名
-        current_time = datetime.now()
+        current_time = datetime.datetime.now()
         time_str = current_time.strftime(r'%Y%m%d%H%M%S')
         return time_str
 
@@ -57,4 +52,3 @@ class CommentWriter:
         if self.file:
             await self.file.flush()
             await self.file.close()
-
