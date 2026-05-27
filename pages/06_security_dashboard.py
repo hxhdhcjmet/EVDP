@@ -8,17 +8,15 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from pathlib import Path
-import sys
 import os
 from datetime import datetime
 import json
 
-# 添加项目路径
-sys.path.insert(0, '/home/EVDP')
-
 from core.analysis import SecurityPipeline
+from core.paths import DATA_DIR, UPLOAD_DIR, ensure_runtime_dirs
 
 # 页面配置
+ensure_runtime_dirs()
 st.set_page_config(
     page_title="舆情安全分析仪表盘",
     layout="wide",
@@ -120,7 +118,7 @@ def render_security_dashboard():
 
     with col1:
         st.markdown("**方式 1: 从已有数据选择**")
-        data_dir = Path('/home/EVDP/data')
+        data_dir = DATA_DIR
         if data_dir.exists():
             jsonl_files = list(data_dir.rglob('*.jsonl'))
             if jsonl_files:
@@ -128,7 +126,7 @@ def render_security_dashboard():
                 selected_file = st.selectbox(
                     "选择数据文件",
                     file_options,
-                    format_func=lambda x: x.split('/data/')[-1] if '/data/' in x else x
+                    format_func=lambda x: str(Path(x).relative_to(DATA_DIR))
                 )
             else:
                 st.warning("未找到数据文件")
@@ -179,6 +177,7 @@ def render_security_dashboard():
         st.markdown("**分析选项**")
         enable_ip = st.checkbox("启用 IP 地域分析", value=True)
         enable_user = st.checkbox("启用用户画像", value=True)
+        enable_anomaly = st.checkbox("启用异常检测", value=True)
 
     # ========== 执行分析 ==========
     st.markdown('<p class="step-header">🚀 步骤 3: 执行分析</p>', unsafe_allow_html=True)
@@ -190,10 +189,10 @@ def render_security_dashboard():
             # 确定数据源
             data_source = None
             if uploaded_file:
-                temp_path = f"/tmp/{uploaded_file.name}"
+                temp_path = UPLOAD_DIR / uploaded_file.name
                 with open(temp_path, 'wb') as f:
                     f.write(uploaded_file.getbuffer())
-                data_source = temp_path
+                data_source = str(temp_path)
             elif selected_file:
                 data_source = selected_file
 
@@ -203,7 +202,10 @@ def render_security_dashboard():
                 # 使用当前配置创建 pipeline
                 pipeline = SecurityPipeline(
                     risk_threshold=risk_threshold,
-                    analysis_limit=analysis_limit
+                    analysis_limit=analysis_limit,
+                    enable_ip=enable_ip,
+                    enable_user=enable_user,
+                    enable_anomaly=enable_anomaly
                 )
                 # 执行流水线
                 with st.spinner("正在执行完整分析流水线..."):
@@ -454,7 +456,7 @@ def render_security_dashboard():
                     try:
                         # 获取数据目录
                         import os
-                        data_dir = os.path.dirname(report.source_file) or "/home/EVDP/data"
+                        data_dir = os.path.dirname(report.source_file) or str(DATA_DIR)
                         
                         # 保存报告
                         saved_files = report.save_report(

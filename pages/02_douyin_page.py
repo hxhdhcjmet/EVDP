@@ -8,13 +8,15 @@ from core.spider.douyin.douyin_comment_writer import CommentWriter
 from core.spider.douyin.douyin_comment_analyser import CommentVisualizer
 from core.spider.douyin.douyin_login import login_and_save_cookies
 from core.spider.douyin.verify_cookie import verify_cookie
+
+st.set_page_config(
+    page_title="抖音评论采集与分析",
+    page_icon="icon/douyin.jpg",
+    layout="wide"
+)
+
 def render_douyin_page():
     st.title("🎵 抖音评论全自动采集与分析")
-    st.set_page_config(
-        page_title = "抖音评论采集与分析",
-        page_icon= "icon/douyin.jpg",
-        layout = "wide"     
-    )
 
     # ------ 侧边栏 ------
     # Cookie 管理

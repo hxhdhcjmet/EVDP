@@ -4,15 +4,17 @@ import os
 import re
 from core.spider.tieba.auth import AuthManager
 from core.spider.tieba.scraper import TiebaAsyncScraper
+from core.paths import DATA_DIR
 import random
+
+st.set_page_config(
+    page_title="百度贴吧帖子采集",
+    page_icon="icon/tieba.webp",
+    layout="wide"
+)
 
 def render_tieba_page():
     st.title("📌 百度贴吧帖子自动采集")
-    st.set_page_config(
-        page_title = "百度贴吧帖子采集",
-        page_icon = "icon/tieba.webp",
-        layout = "wide"
-    )
 
     # ------ 侧边栏：账户配置 ------
     auth = AuthManager()
@@ -118,7 +120,7 @@ def render_tieba_page():
                         callback=update_ui
                     ))
                 
-                st.success(f"✅ 采集完成！数据已保存至: /home/EVDP/data/tid_{post_id}")
+                st.success(f"✅ 采集完成！数据已保存至: {DATA_DIR / f'tid_{post_id}'}")
                 
             except Exception as e:
                 st.error(f"采集过程中发生错误 ({url}): {str(e)}")

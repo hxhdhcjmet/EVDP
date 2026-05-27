@@ -6,14 +6,15 @@ from core.spider.bilibili.bilibili_comment import Video_Comment_Extractor
 from core.spider.bilibili.CommentWriter import CommentWriter
 from core.spider.bilibili.CommentAnalyser import CommentAnalyser
 
+st.set_page_config(
+    page_title="Bilibili 评论采集与分析",
+    page_icon="icon/bilibili.webp",
+    layout="wide"
+)
+
 
 def render_bilibili_page():
     st.title("📺 Bilibili 评论全自动采集与分析")
-    st.set_page_config(
-        page_title = "Bilibili 评论采集与分析",
-        page_icon="icon/bilibili.webp",
-        layout = "wide"    
-    )
 
     #------ 侧边栏 ------
     # Cookie 管理
