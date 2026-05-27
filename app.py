@@ -209,6 +209,12 @@ with proc_col2:
 - 分析评论情感倾向（正面/负面/中立）
 - 批量处理大量评论
 - 情感分布可视化
+
+**数据与报告中心** <span class="module-name">09_report_center</span>
+
+- 汇总各平台采集文件与记录数
+- 查看已导出的安全分析报告
+- 快速发现空数据文件和数据分布情况
 """, unsafe_allow_html=True)
 
 # ============ 安全分析模块（核心） ============
@@ -252,7 +258,7 @@ with tip_col1:
     **首次使用建议：**
     1. 先从 `01_bilibili_page` 或 `03_tieba_page` 获取数据
     2. 然后打开 `06_security_dashboard` 进行分析
-    3. 最后导出报告查看结果
+    3. 最后进入 `09_report_center` 查看数据与报告归档
     """)
 
 with tip_col2:
