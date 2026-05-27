@@ -2,7 +2,7 @@
 # 基于 playwright 官方镜像，内置 Python + Chromium
 FROM mcr.microsoft.com/playwright/python:v1.49.0-noble
 
-# 保持与代码中硬编码路径一致，避免大量修改
+# 应用工作目录
 WORKDIR /home/EVDP
 
 # 复制 requirements.txt（先复制，Docker 缓存优化）
