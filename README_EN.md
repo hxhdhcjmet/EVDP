@@ -11,6 +11,7 @@ The project is designed for coursework, open-source demos, local analysis protot
 - Multi-platform collectors: Bilibili, Douyin, Baidu Tieba, and Zhihu entry points with cookie or QR-code login flows.
 - Unified data cleaning: normalizes comments, replies, user fields, timestamps, IP locations, and content metadata.
 - Safety analysis pipeline: combines sentiment, sensitive words, regional concentration, suspicious users, and anomaly detection.
+- AI-assisted analysis: supports user-configured OpenAI-compatible APIs for summaries, risk review, and Q&A.
 - Interactive dashboard: Streamlit UI for file preview, configurable analysis, visual charts, and report downloads.
 - Report center: summarizes local datasets, platform distribution, empty files, and exported safety reports.
 - Multi-format reports: exports Markdown, JSON, HTML, and TXT reports.
@@ -28,6 +29,7 @@ The project is designed for coursework, open-source demos, local analysis protot
 | `07_sentiment_analysis` | Standalone sentiment analysis and high-risk comment export |
 | `08_data_cleaning` | Standalone data cleaning and quality statistics |
 | `09_report_center` | Dataset summary, platform distribution, report archive, and quality overview |
+| `10_ai_analysis` | AI summaries, risk review, response recommendations, and custom Q&A |
 
 ## Quick Start
 
@@ -79,6 +81,7 @@ You can also use `setup.sh` or `setup.ps1` for dependency installation.
 3. Clean data in `08_data_cleaning`, or run the full pipeline directly in `06_security_dashboard`.
 4. Enable or disable IP analysis, user profiling, and anomaly detection as needed.
 5. Export reports and review local archives in `09_report_center`.
+6. Configure an API provider in `10_ai_analysis` when AI-assisted review is needed.
 
 ## Data And Reports
 
@@ -87,6 +90,7 @@ You can also use `setup.sh` or `setup.ps1` for dependency installation.
 - Reports are saved next to the analyzed source file by default.
 - Sensitive word lists live in `assets/sensitive_words/`.
 - Stopword lists live in `assets/stopwords/`.
+- AI analysis sends only statistics and sampled comments to the user-configured model service by default. API keys are kept in the current session unless the user chooses otherwise.
 
 ## Project Structure
 
@@ -115,6 +119,7 @@ EVDP produces local heuristic risk scores for triage and demonstration. They are
 - IP location: coverage ratio, Gini coefficient, top-region concentration, and spread pattern.
 - User profiling: comment count, repeated content, short-comment ratio, timing regularity, and platform-specific metadata.
 - Anomaly detection: volume spikes, location concentration, negative sentiment spikes, repeated content, and sensitive keyword concentration.
+- AI-assisted review: natural-language analysis based on local statistics and sampled comments. Human review is still required.
 
 ## Troubleshooting
 
@@ -128,6 +133,7 @@ EVDP produces local heuristic risk scores for triage and demonstration. They are
 
 ## Roadmap
 
+- Add a database synchronization page.
 - Add a sensitive-word management page.
 - Add multi-file comparison analysis.
 - Improve task status tracking and retry handling.
