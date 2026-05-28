@@ -1,0 +1,108 @@
+[project]
+name = "evdp"
+version = "2.2.0"
+description = "Easy & Visual Data Processor for public-opinion collection, cleaning, safety analysis, and reporting."
+readme = "README.md"
+requires-python = ">=3.10,<3.15"
+license = { text = "MIT" }
+authors = [
+    { name = "EVDP Contributors" }
+]
+keywords = [
+    "streamlit",
+    "public-opinion",
+    "sentiment-analysis",
+    "data-processing",
+    "crawler",
+]
+dependencies = [
+    "streamlit",
+    "pandas",
+    "numpy",
+    "scipy",
+    "scikit-learn",
+    "joblib",
+    "threadpoolctl",
+    "matplotlib",
+    "seaborn",
+    "plotly",
+    "altair",
+    "pydeck",
+    "wordcloud",
+    "pillow",
+    "jieba",
+    "snownlp",
+    "requests",
+    "aiohttp",
+    "aiofiles",
+    "beautifulsoup4",
+    "bs4",
+    "playwright==1.49.0",
+    "streamlit-drawable-canvas",
+    "pyzbar",
+    "qrcode",
+    "tqdm",
+    "tenacity",
+    "gitpython",
+    "click",
+    "jinja2",
+    "fonttools",
+    "packaging",
+    "python-dateutil",
+    "pytz",
+    "urllib3",
+    "certifi",
+    "charset-normalizer",
+    "idna",
+    "pyparsing",
+    "toml",
+    "typing-extensions",
+    "tzdata",
+    "cachetools",
+    "protobuf",
+    "rpds-py",
+    "cycler",
+    "kiwisolver",
+    "contourpy",
+    "narwhals",
+    "watchdog",
+]
+
+[project.optional-dependencies]
+ai = [
+    "openai>=1.0.0",
+    "tiktoken",
+]
+db = [
+    "sqlalchemy>=2.0.0",
+    "psycopg[binary]>=3.1.0",
+    "pymysql>=1.1.0",
+]
+dev = [
+    "pytest",
+    "ruff",
+]
+all = [
+    "openai>=1.0.0",
+    "tiktoken",
+    "sqlalchemy>=2.0.0",
+    "psycopg[binary]>=3.1.0",
+    "pymysql>=1.1.0",
+    "pytest",
+    "ruff",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = [
+    "core",
+]
+python_files = [
+    "test_*.py",
+]
