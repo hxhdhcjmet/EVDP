@@ -246,6 +246,14 @@ st.markdown("""
 4. 查看结果并导出报告
 """, unsafe_allow_html=True)
 
+st.markdown("""
+**AI 舆情分析** <span class="module-name">10_ai_analysis</span>
+
+- 支持 OpenAI-compatible API 配置（Base URL / API Key / Model）
+- 对本地 JSONL 数据进行舆情摘要、风险研判、处置建议和自定义问答
+- 默认只发送统计摘要和抽样评论，降低数据量和调用成本
+""", unsafe_allow_html=True)
+
 st.markdown("---")
 
 # 使用提示
@@ -267,6 +275,7 @@ with tip_col2:
     - 抖音/知乎爬取需要登录Cookie
     - 大量数据分析可能需要较长时间
     - 报告会自动保存到数据文件所在目录
+    - AI 分析会将抽样数据发送到你配置的模型服务
     """)
 
 # 页脚
