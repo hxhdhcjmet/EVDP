@@ -183,14 +183,14 @@ class BilibiliParser(PlatformParser):
         if data.get('ctime'):
             try:
                 publish_time = datetime.fromtimestamp(data['ctime'])
-            except:
-                pass
+            except (TypeError, ValueError, OSError) as exc:
+                logger.debug("Bilibili 时间解析失败: %s", exc)
         
         # 生成评论ID
         comment_id = data.get('rpid')
         if not comment_id:
-            # 使用内容hash生成ID
-            comment_id = f"bili_{hashlib.md5(content.encode()).hexdigest()[:12]}"
+            # Use a strong digest for deterministic fallback IDs.
+            comment_id = f"bili_{hashlib.sha256(content.encode()).hexdigest()[:12]}"
         
         main_comment = UnifiedComment(
             comment_id=str(comment_id),
@@ -261,8 +261,8 @@ class TiebaParser(PlatformParser):
         if time_str:
             try:
                 publish_time = datetime.strptime(time_str, '%Y-%m-%d %H:%M')
-            except:
-                pass
+            except ValueError as exc:
+                logger.debug("贴吧时间解析失败: %s", exc)
         
         # 清洗内容
         content, metadata = cleaner.clean(data.get('content', ''))
@@ -317,7 +317,7 @@ class ZhihuParser(PlatformParser):
         
         # 知乎数据特殊,可能是文章内容而非评论
         return [UnifiedComment(
-            comment_id=f"zhihu_{hashlib.md5(content[:100].encode()).hexdigest()[:12]}",
+            comment_id=f"zhihu_{hashlib.sha256(content[:100].encode()).hexdigest()[:12]}",
             platform='zhihu',
             content=content,
             user_name='知乎用户',
@@ -514,7 +514,8 @@ class DataCleaner:
                     raw_data = json.loads(line)
                     comments = parser.parse(raw_data, self.content_cleaner)
                     yield from comments
-                except:
+                except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+                    logger.debug("流式清洗跳过异常行: %s", exc)
                     continue
     
     def _detect_platform(self, file_path: str) -> str:
@@ -540,8 +541,8 @@ class DataCleaner:
                     # 知乎特征
                     elif 'type' in data and 'content' in data:
                         return 'zhihu'
-        except:
-            pass
+        except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+            logger.debug("读取首行检测平台失败: %s", exc)
         
         return 'unknown'
     
