@@ -1,6 +1,6 @@
 import os
 import time
-import random
+import secrets
 import re
 import json
 import hashlib
@@ -72,13 +72,14 @@ USER_AGENTS = [
 
 def random_sleep(a=0.5, b=1.5):
     """随机延迟，模拟人类操作"""
-    time.sleep(random.uniform(a, b))
+    time.sleep(secrets.SystemRandom().uniform(a, b))
 
 
 def generate_random_user_agent():
     """生成随机uer_agent头"""
-    DOWN_HEADERS['User-Agent'] = random.choice(USER_AGENTS)
-    TIEBA_HEADERS['User-Agent'] = random.choice(USER_AGENTS)
+    chooser = secrets.SystemRandom()
+    DOWN_HEADERS['User-Agent'] = chooser.choice(USER_AGENTS)
+    TIEBA_HEADERS['User-Agent'] = chooser.choice(USER_AGENTS)
 
 
 def get_cookie():
@@ -261,11 +262,11 @@ class TiebaImageDownloader:
                 response = requests.get(url, headers=DOWN_HEADERS, timeout=10)
                 response.raise_for_status()
                 
-                # 计算图片MD5，避免重复下载
+                # 计算图片内容摘要，避免重复下载
                 image_content = response.content
-                md5_hash = hashlib.md5(image_content).hexdigest()
+                content_hash = hashlib.sha256(image_content).hexdigest()
                 
-                if md5_hash in self.downloaded_images:
+                if content_hash in self.downloaded_images:
                     print(f"图片已存在，跳过: {url}")
                     return
                 
@@ -278,14 +279,14 @@ class TiebaImageDownloader:
                     f.write(image_content)
                 
                 # 记录已下载图片
-                self.downloaded_images.add(md5_hash)
+                self.downloaded_images.add(content_hash)
                 print(f"图片下载成功: {image_name}")
                 
                 return
             except Exception as e:
                 print(f"下载图片失败({retry + 1}/{self.max_retries}): {url}, 错误: {e}")
                 # 重试前延迟
-                time.sleep(random.uniform(1.0, 3.0))
+                random_sleep(1.0, 3.0)
         
         print(f"图片下载失败，已达最大重试次数: {url}")
 
@@ -328,7 +329,7 @@ class TiebaImageDownloader:
             for url in all_images:
                 self.download_image(url)
                 # 随机延迟
-                time.sleep(random.uniform(0.1, 0.5))
+                random_sleep(0.1, 0.5)
         
         print("图片下载完成")
         

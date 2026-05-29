@@ -138,7 +138,7 @@ def get_image_name(url,response):
         name_part, ext_part = os.path.splitext(base)
         if ext_part:
             ext = ext_part
-    digest = hashlib.md5(response.content).hexdigest()[:8]
+    digest = hashlib.sha256(response.content).hexdigest()[:8]
     ts = default_filename()
     filename = f"{ts}_{digest}{ext}"
     if len(filename) > 100:
